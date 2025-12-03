@@ -1,0 +1,7 @@
+{
+  "name": "TARDIS Talk",
+  "description": "Have a conversation with The Doctor via the TARDIS console to practice your English. Features audio-reactive visuals and incoming transmission simulations.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
