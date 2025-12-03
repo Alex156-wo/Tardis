@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { GoogleGenAI, LiveServerMessage } from '@google/genai';
+import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { AppState, CallerIdentity, HistoryItem } from './types';
 import { 
   getSystemInstruction, 
@@ -408,7 +408,7 @@ const App: React.FC = () => {
       scriptProcessorRef.current = scriptProcessor;
       
       const { memory, score } = loadMemory(activeCaller.id);
-      const systemInstruction = getSystemInstruction(activeCaller, memory, score);
+      const systemInstructionText = getSystemInstruction(activeCaller, memory, score);
 
       const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
@@ -492,11 +492,12 @@ const App: React.FC = () => {
         },
         config: {
           tools: [{ functionDeclarations: [SEND_PHOTO_TOOL] }],
-          responseModalities: ['AUDIO'], 
+          responseModalities: [Modality.AUDIO], 
           inputAudioTranscription: {}, 
           outputAudioTranscription: {}, 
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: activeCaller.voiceName || 'Puck' } } },
-          systemInstruction: systemInstruction,
+          // STRICT CONTENT FORMAT FOR SYSTEM INSTRUCTION WITH TOOLS
+          systemInstruction: { parts: [{ text: systemInstructionText }] },
         }
       });
       sessionRef.current = await sessionPromise;
