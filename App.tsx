@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
+import { GoogleGenAI, LiveServerMessage } from '@google/genai';
 import { AppState, CallerIdentity, HistoryItem } from './types';
 import { 
   getSystemInstruction, 
@@ -424,7 +424,6 @@ const App: React.FC = () => {
             }
 
             // 2. STABILITY FIX: Send Silence Header + TEXT TRIGGER
-            // Sending text forces the model to acknowledge the turn and start speaking.
             setTimeout(() => {
                sessionPromise.then(session => {
                    // A. Send Silence
@@ -493,11 +492,11 @@ const App: React.FC = () => {
         },
         config: {
           tools: [{ functionDeclarations: [SEND_PHOTO_TOOL] }],
-          responseModalities: [Modality.AUDIO], 
+          responseModalities: ['AUDIO'], 
           inputAudioTranscription: {}, 
           outputAudioTranscription: {}, 
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: activeCaller.voiceName || 'Puck' } } },
-          systemInstruction: { parts: [{ text: systemInstruction }] },
+          systemInstruction: systemInstruction,
         }
       });
       sessionRef.current = await sessionPromise;
