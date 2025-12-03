@@ -226,6 +226,7 @@ const App: React.FC = () => {
   const [caller, setCaller] = useState<CallerIdentity>(POTENTIAL_CALLERS[0]);
   const [isGlitching, setIsGlitching] = useState(false);
   const [scores, setScores] = useState<{ [key: string]: number }>({});
+  const [permissionError, setPermissionError] = useState<boolean>(false);
   
   // Photo Logic State
   const [showRecipientModal, setShowRecipientModal] = useState(false);
@@ -442,8 +443,12 @@ const App: React.FC = () => {
   }, [saveMemory]);
 
   const handleEndCall = useCallback(() => {
-    // Prevent accidental termination if call just started (under 5 seconds)
-    // unless it is a manual user action (not checked here but usually button press)
+    const duration = Date.now() - startTimeRef.current;
+    
+    // Safety check: If call ends within 5 seconds, it might be a connection drop.
+    // However, if we are here, we must cleanup.
+    console.log(`Call ended. Duration: ${duration}ms`);
+
     stopAudio();
     setAppState(AppState.IDLE);
     setPendingPhoto(null);
@@ -456,6 +461,7 @@ const App: React.FC = () => {
   const startConversation = async (specificCaller?: CallerIdentity) => {
     try {
       setAppState(AppState.CONNECTING);
+      setPermissionError(false);
       startTimeRef.current = Date.now();
       
       const activeCaller = specificCaller || caller;
@@ -464,15 +470,24 @@ const App: React.FC = () => {
 
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          sampleRate: 16000,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        } 
-      });
-      streamRef.current = stream;
+      // Explicit try/catch for microphone permission
+      let stream: MediaStream;
+      try {
+          stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+              sampleRate: 16000,
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            } 
+          });
+          streamRef.current = stream;
+      } catch (err) {
+          console.error("Microphone permission denied:", err);
+          setPermissionError(true);
+          setAppState(AppState.IDLE);
+          return;
+      }
 
       const inputCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
       const outputCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
@@ -524,13 +539,14 @@ const App: React.FC = () => {
             // 2. SEND SILENCE TO WAKE UP MODEL (Force it to speak first)
             // INCREASED DELAY AND BUFFER SIZE TO PREVENT IMMEDIATE DISCONNECT
             setTimeout(() => {
-              const silence = new Float32Array(24000); // 1.5s of silence to ensure stable connection
+              // 1 second of silence to ensure VAD detects activity
+              const silence = new Float32Array(16000); 
               const pcmBlob = createBlob(silence);
               
               sessionPromise.then(session => {
                 session.sendRealtimeInput({ media: pcmBlob });
               }).catch(e => console.warn("Failed to send initial silence", e));
-            }, 800); // Wait almost a second before sending data
+            }, 500); // 500ms delay
 
             scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
               const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
@@ -599,8 +615,9 @@ const App: React.FC = () => {
           },
           onclose: () => {
              console.log("Connection Closed by Server");
-             // Prevent "hallucinated" closes or short-connection errors from jarring the user too much
-             // But if server closes, we must close.
+             // Prevent immediate hangup loop:
+             // If connection closes too fast (server error), we just handle end call.
+             // We can't really force it open.
              handleEndCall();
           },
           onerror: (err) => {
@@ -734,6 +751,14 @@ const App: React.FC = () => {
            description={receivedPhotoData.description} 
            onClose={() => setReceivedPhotoData(null)} 
          />
+      )}
+      
+      {permissionError && (
+          <div className="absolute top-10 z-50 bg-red-900 border border-red-500 text-white p-4 rounded shadow-lg max-w-sm text-center">
+              <p className="font-bold mb-2">MICROPHONE ACCESS DENIED</p>
+              <p className="text-sm">TARDIS communications require audio input. Please allow microphone access in your browser settings and try again.</p>
+              <button onClick={() => setPermissionError(false)} className="mt-4 px-4 py-1 bg-red-700 rounded text-xs">DISMISS</button>
+          </div>
       )}
 
       {/* HIDDEN FILE INPUT */}

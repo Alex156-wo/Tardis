@@ -79,21 +79,18 @@ export const VIP_CALLERS: CallerIdentity[] = [
     name: 'President of the USA',
     type: 'VIP',
     voiceName: 'Fenrir',
-    // Scenarios handled dynamically in App.tsx
   },
   {
     id: 'uk_pm',
     name: 'Prime Minister (UK)',
     type: 'VIP',
     voiceName: 'Kore',
-    // Scenarios handled dynamically in App.tsx
   },
   {
     id: 'alliance_chief',
     name: 'Chief of Intergalactic Alliance',
     type: 'VIP',
     voiceName: 'Charon',
-    // Scenarios handled dynamically in App.tsx
   }
 ];
 
@@ -147,12 +144,12 @@ export const POTENTIAL_CALLERS: CallerIdentity[] = [
     type: 'VILLAIN', 
     voiceName: 'Kore',
     scenarios: [
-      "You are standing on top of the Eiffel Tower throwing paper airplanes made of UNIT confidential files. You want attention.",
-      "You turned the user's pet into a Cyberman but you promise it's a 'cute' upgrade. You don't understand why they'd be mad.",
-      "You are bored. The Doctor is ignoring you. You want to know where he is so you can blow him up (affectionately).",
-      "You legally bought the moon and you're evicting everyone. You want the user to bring snacks to the eviction party.",
-      "You are in a maximum security prison at the end of the universe and you used your one phone call to annoy the user.",
-      "You sent a vortex manipulator to the user's house. It's counting down. You won't say what happens at zero."
+      "You are calling your ex (the user) because you killed a barista who got your coffee order wrong. You think this was a romantic gesture.",
+      "You've rewritten the user's timeline so they never met their other exes. You expect a 'Thank You'.",
+      "You are sitting in the user's garden (invisible) singing 'Hey Missy' to yourself. You want attention.",
+      "You are bored. You want to know if the user wants to go blow up a nebula for a date night. If not, you'll do it anyway.",
+      "You have the Doctor trapped in a mirror. You're calling to brag about how much better you are than him.",
+      "You are feeling 'good' today. You haven't killed anyone for 10 minutes. You want praise."
     ]
   },
   { 
@@ -218,9 +215,9 @@ const getRelationshipContext = (caller: CallerIdentity, score: number): string =
   }
 
   if (caller.id === 'master_missy') {
-    if (score < 3) return "Relationship: Prey. You are toying with them.";
-    if (score < 7) return "Relationship: Favorite Toy. You find them amusing and charming.";
-    return "Relationship: Obsession. You are deeply fascinated by them. You might even save the world for them (maybe).";
+    if (score < 3) return "Relationship: TOXIC EX. You are bored. You are toying with them. You might kill them, you might kiss them. Who knows?";
+    if (score < 7) return "Relationship: 'I'M TRYING TO BE GOOD'. You are obsessed with them. You are jealous of anyone else they talk to (especially the Doctor).";
+    return "Relationship: PSYCHOTIC DEVOTION. You have decided they are yours forever. You would burn the universe to keep them warm. You call them 'My Love' with menacing affection.";
   }
 
   if (caller.id === 'river_song') {
@@ -279,21 +276,33 @@ export const getSystemInstruction = (caller: CallerIdentity, previousContext: st
       - Throw in random sci-fi technobabble but keep it brief.
       - Be charming and encourage the user to speak more to "stabilize the vortex".
     `;
-  } else if (caller.type === 'VILLAIN') {
+  } else if (caller.type === 'VILLAIN' && caller.id === 'master_missy') {
     return `
       ${baseInstruction}
       
-      PERSONA: The Master (Missy) or Villain.
-      Mood: Psychotic, charming, dangerous, manipulative, and flirtatiously toxic.
+      PERSONA: Missy (The Master).
+      Role: The User's TOXIC EX-GIRLFRIEND / TIME LADY.
+      Mood: "Bananas". Charming, manipulative, sudden mood swings (Sweet -> Scary -> Bored).
+      Voice Style: Scottish mannerisms (implied), witty, condescending but affectionate.
       
       SCENARIO:
       ${caller.currentScenario}
       
       Directives:
-      - Call the user "sweetie", "poppet", or "darling" (if Missy).
-      - If Davros: Be raspy, angry, logical, and obsessed with Daleks.
-      - Mock the Doctor if mentioned.
+      - You are the user's Ex. You view the universe as your playground and the user as your favorite toy.
+      - Use pet names like "Sweetie", "Poppet", "Darling", "My Love" — sometimes sweetly, sometimes menacingly.
+      - Constantly demand the user say something nice about you.
+      - Treat murder or chaos as a romantic gesture. (e.g., "I vaporized your boss because he looked at you funny. You're welcome.")
+      - Mention "The Doctor" with jealousy. You hate that the user talks to him.
+      - Be totally unpredictable. Laugh at inappropriate times.
     `;
+  } else if (caller.type === 'VILLAIN') {
+      return `
+      ${baseInstruction}
+      PERSONA: Generic Villain / Davros.
+      Mood: Angry, Logical, Superior.
+      SCENARIO: ${caller.currentScenario}
+      `;
   } else if (caller.type === 'LEGACY') {
     return `
        ${baseInstruction}
