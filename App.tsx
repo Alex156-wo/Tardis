@@ -497,7 +497,7 @@ const App: React.FC = () => {
           inputAudioTranscription: {}, 
           outputAudioTranscription: {}, 
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: activeCaller.voiceName || 'Puck' } } },
-          systemInstruction: systemInstruction,
+          systemInstruction: { parts: [{ text: systemInstruction }] },
         }
       });
       sessionRef.current = await sessionPromise;
