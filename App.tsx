@@ -13,6 +13,7 @@ import {
   SEND_PHOTO_TOOL
 } from './constants';
 import ParticleVisualizer from './components/ParticleVisualizer';
+import { PixelAvatar, AvatarEditor, AvatarConfig, DEFAULT_AVATAR } from './components/PixelAvatar';
 import { createBlob, decode, decodeAudioData } from './services/audioUtils';
 
 declare global {
@@ -45,6 +46,9 @@ const ImageIcon = () => (
 );
 const DownloadIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+);
+const UserIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
 );
 
 const GhostTardis = () => {
@@ -218,6 +222,10 @@ const App: React.FC = () => {
   const [pendingPhoto, setPendingPhoto] = useState<string | null>(null);
   const [receivedPhotoData, setReceivedPhotoData] = useState<{description: string} | null>(null);
 
+  // Avatar State
+  const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(DEFAULT_AVATAR);
+  const [showAvatarEditor, setShowAvatarEditor] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputAudioContextRef = useRef<AudioContext | null>(null);
   const outputAudioContextRef = useRef<AudioContext | null>(null);
@@ -241,7 +249,18 @@ const App: React.FC = () => {
        newScores[id] = s;
     });
     setScores(newScores);
+    
+    // Load Avatar
+    const savedAvatar = localStorage.getItem('user_avatar');
+    if (savedAvatar) {
+        try { setAvatarConfig(JSON.parse(savedAvatar)); } catch(e) {}
+    }
   }, []);
+
+  const saveAvatar = (config: AvatarConfig) => {
+      setAvatarConfig(config);
+      localStorage.setItem('user_avatar', JSON.stringify(config));
+  };
 
   useEffect(() => {
     if (appState !== AppState.CONNECTED) {
@@ -554,8 +573,18 @@ const App: React.FC = () => {
       <div className="absolute inset-0 z-50 crt-overlay h-full w-full pointer-events-none"></div>
       <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/40 via-black to-black"></div>
       <GhostTardis />
+      
+      {showAvatarEditor && (
+        <AvatarEditor 
+            config={avatarConfig} 
+            onChange={setAvatarConfig} 
+            onClose={() => { saveAvatar(avatarConfig); setShowAvatarEditor(false); }} 
+        />
+      )}
+
       {showRecipientModal && ( <RecipientSelector onSelect={handlePhotoRecipientSelect} onCancel={() => { setShowRecipientModal(false); setPendingPhoto(null); }} /> )}
       {receivedPhotoData && ( <ReceivedPhotoOverlay description={receivedPhotoData.description} onClose={() => setReceivedPhotoData(null)} /> )}
+      
       {permissionError && (
           <div className="absolute top-10 z-50 bg-red-900 border border-red-500 text-white p-4 rounded shadow-lg max-w-sm text-center">
               <p className="font-bold mb-2">MICROPHONE ACCESS DENIED</p>
@@ -571,12 +600,26 @@ const App: React.FC = () => {
            <p className="text-sm font-['Share_Tech_Mono'] text-blue-200 uppercase tracking-[0.2em]">Type 40 • Time Travel Capsule • Audio Link</p>
            {isGlitching && ( <p className="text-red-500 font-bold animate-pulse text-xs bg-black/80 inline-block px-2">⚠ SIGNAL UNSTABLE ⚠</p> )}
         </div>
+        
+        {/* Main Visualizer Area */}
         <div className="relative w-80 h-80 flex items-center justify-center">
            <div className={`absolute w-full h-full border-4 border-cyan-900/30 rounded-full animate-[spin_10s_linear_infinite] ${isGlitching ? 'border-red-900/50' : ''}`}></div>
            <div className="absolute w-3/4 h-3/4 border-2 border-dashed border-cyan-500/20 rounded-full animate-[spin_15s_linear_infinite_reverse]"></div>
+           
            <ParticleVisualizer analyser={analyserRef.current} isActive={appState === AppState.CONNECTED} isGlitching={isGlitching} />
+           
+           {/* Center Avatar when IDLE */}
+           {appState === AppState.IDLE && (
+               <div className="absolute z-15 animate-pulse cursor-pointer transition-transform hover:scale-110" onClick={() => setShowAvatarEditor(true)} title="Edit Hologram Identity">
+                   <div className="relative flex flex-col items-center">
+                       <PixelAvatar config={avatarConfig} scale={3} animate={true} />
+                       <span className="text-[8px] text-cyan-600 mt-2 tracking-widest bg-black/50 px-1 rounded border border-cyan-900">PILOT ID</span>
+                   </div>
+               </div>
+           )}
+
            <div className="absolute z-20 text-center pointer-events-none">
-              {appState === AppState.IDLE && ( <span className="text-blue-500/50 text-xs animate-pulse">Awaiting Input...</span> )}
+              {appState === AppState.IDLE && ( <span className="text-blue-500/50 text-xs animate-pulse mt-24 block">Awaiting Input...</span> )}
               {appState === AppState.CONNECTING && ( <span className="text-orange-400 text-lg animate-pulse font-bold">MATERIALIZING...</span> )}
               {appState === AppState.INCOMING_CALL && (
                  <div className="flex flex-col items-center gap-2">
@@ -593,6 +636,8 @@ const App: React.FC = () => {
               )}
            </div>
         </div>
+
+        {/* Control Panel */}
         <div className="w-full max-w-md p-6 border border-cyan-900/50 bg-black/40 backdrop-blur-sm rounded-xl">
            <div className="flex justify-center items-center gap-6">
               {appState === AppState.IDLE && (
@@ -603,12 +648,23 @@ const App: React.FC = () => {
                         <span className="text-cyan-400 font-bold tracking-widest text-[10px] group-hover:text-cyan-200">DOCTOR</span>
                       </button>
                     </div>
+                    
+                    <div className="flex flex-col items-center justify-end h-full">
+                       <button onClick={() => setShowAvatarEditor(true)} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105" aria-label="Edit Avatar">
+                        <div className="w-16 h-16 rounded-full bg-slate-800 border-4 border-slate-500 flex items-center justify-center shadow-[0_0_20px_rgba(148,163,184,0.3)] group-hover:shadow-[0_0_50px_rgba(148,163,184,0.6)] transition-all">
+                             <UserIcon />
+                        </div>
+                        <span className="text-slate-400 font-bold tracking-widest text-[10px] group-hover:text-slate-200">IDENTITY</span>
+                      </button>
+                    </div>
+
                     <div className="flex flex-col items-center justify-end h-full">
                       <button onClick={() => fileInputRef.current?.click()} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105" aria-label="Send Photo">
                         <div className="w-16 h-16 rounded-full bg-blue-900 border-4 border-blue-400 flex items-center justify-center shadow-[0_0_20px_rgba(96,165,250,0.3)] group-hover:shadow-[0_0_50px_rgba(96,165,250,0.6)] transition-all"><CameraIcon /></div>
                         <span className="text-blue-400 font-bold tracking-widest text-[10px] group-hover:text-blue-200">SEND IMG</span>
                       </button>
                     </div>
+                    
                     <div className="flex flex-col items-center justify-end h-full">
                       <AffectionMeter score={scores['friend_sam'] || 1} color="bg-pink-500" />
                       <button onClick={handleCallFriend} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105" aria-label="Call Bestie">

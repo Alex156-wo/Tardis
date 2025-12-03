@@ -1,6 +1,6 @@
 
 import { CallerIdentity } from "./types";
-import { FunctionDeclaration } from "@google/genai";
+import { FunctionDeclaration, Type } from "@google/genai";
 
 export const DOCTOR_VOICE_NAME = 'Puck'; 
 export const TARDIS_BLUE = '#003b6f';
@@ -10,15 +10,15 @@ export const PARTICLE_GOLD = 'rgba(255, 215, 0, 0.8)';
 export const PARTICLE_BLUE = 'rgba(0, 191, 255, 0.8)';
 export const MAX_RELATIONSHIP_SCORE = 10;
 
-// Use string literals for strict schema validation
+// Use SDK Type enum for strict schema validation
 export const SEND_PHOTO_TOOL: FunctionDeclaration = {
   name: "sendPhoto",
   description: "Send a visual image/photo of your current surroundings or an object to the user.",
   parameters: {
-    type: "OBJECT",
+    type: Type.OBJECT,
     properties: {
       description: {
-        type: "STRING",
+        type: Type.STRING,
         description: "A short text description of what is in the photo you are sending."
       }
     },
@@ -113,7 +113,7 @@ export const POTENTIAL_CALLERS: CallerIdentity[] = [
   },
   { 
     id: 'river_song', 
-    name: 'River Song', 
+    name: 'Professor River Song', 
     type: 'LEGACY', 
     voiceName: 'Kore', 
     scenarios: [
@@ -122,7 +122,8 @@ export const POTENTIAL_CALLERS: CallerIdentity[] = [
       "I'm at a party at the end of the universe. The champagne is excellent, but the host is a Zygon.",
       "I need the Doctor. I've accidentally married a robot king and the honeymoon is dragging on.",
       "I'm currently falling out of a spaceship airlock. Don't worry, I have a plan. It involves lipstick.",
-      "I found a vortex manipulator at a pawn shop. Should I buy it?"
+      "I found a vortex manipulator at a pawn shop. Should I buy it?",
+      "I'm investigating a crash site. The ship looks like a giant shoe. It's very stylish."
     ]
   },
   {
