@@ -166,31 +166,23 @@ const RecipientSelector = ({ onSelect, onCancel }: { onSelect: (callerId: string
 };
 
 const ReceivedPhotoOverlay = ({ description, onClose }: { description: string, onClose: () => void }) => {
-  // Procedurally generate "Psychic Paper" visuals based on the description
   const generatePsychicVisual = (text: string) => {
     const t = text.toLowerCase();
-    
-    // Space / Nebula / Sci-Fi
     if (t.includes('space') || t.includes('star') || t.includes('nebula') || t.includes('galaxy') || t.includes('black hole') || t.includes('planet')) {
       return "radial-gradient(circle at 50% 50%, #2b1055 0%, #7597de 25%, #2b1055 50%, #000000 100%)"; 
     }
-    // Danger / Fire / Red
     if (t.includes('fire') || t.includes('burn') || t.includes('explosion') || t.includes('danger') || t.includes('dalek') || t.includes('red')) {
       return "conic-gradient(from 180deg at 50% 50%, #ff0000 0deg, #ff8c00 60deg, #370617 120deg, #ff0000 360deg)";
     }
-    // Nature / Earth
     if (t.includes('garden') || t.includes('tree') || t.includes('flower') || t.includes('park') || t.includes('green') || t.includes('grass')) {
       return "linear-gradient(135deg, #134e5e 0%, #71b280 100%)";
     }
-    // Tech / Cyberman / Silver
     if (t.includes('robot') || t.includes('cyberman') || t.includes('metal') || t.includes('tech') || t.includes('ship')) {
       return "repeating-linear-gradient(45deg, #606dbc, #606dbc 10px, #465298 10px, #465298 20px)";
     }
-    // Water / Ice
     if (t.includes('water') || t.includes('ice') || t.includes('rain') || t.includes('blue') || t.includes('glass')) {
       return "linear-gradient(to top, #accbee 0%, #e7f0fd 100%)";
     }
-    // Default TARDIS Psychic Paper Static
     return "repeating-radial-gradient(circle at 0 0, transparent 0, #000 10px), repeating-linear-gradient(#003b6f55, #003b6f)";
   };
 
@@ -199,18 +191,12 @@ const ReceivedPhotoOverlay = ({ description, onClose }: { description: string, o
   return (
     <div className="absolute inset-0 z-40 bg-black/80 flex flex-col items-center justify-center p-6 animate-fade-in">
         <div className="w-full max-w-sm aspect-square border-4 border-cyan-500 bg-gray-900 relative overflow-hidden shadow-[0_0_50px_rgba(34,211,238,0.3)]">
-            {/* Procedural Background */}
             <div className="absolute inset-0 opacity-80" style={{ background: bgStyle }}></div>
-            
-            {/* Overlay Grid */}
             <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'linear-gradient(rgba(0, 255, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 255, 0.1) 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
-            
-            {/* Description Text Overlay */}
             <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-4 border-t border-cyan-500">
                <p className="text-[10px] text-cyan-500 font-mono uppercase mb-1">VISUAL DATA DECODED:</p>
                <p className="text-white font-mono text-sm leading-tight italic">"{description}"</p>
             </div>
-
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <span className="text-cyan-400 font-mono text-xs animate-pulse bg-black/50 px-2 rounded">PSYCHIC PAPER PROJECTING...</span>
             </div>
@@ -228,16 +214,11 @@ const App: React.FC = () => {
   const [scores, setScores] = useState<{ [key: string]: number }>({});
   const [permissionError, setPermissionError] = useState<boolean>(false);
   
-  // Photo Logic State
   const [showRecipientModal, setShowRecipientModal] = useState(false);
   const [pendingPhoto, setPendingPhoto] = useState<string | null>(null);
-  
-  // Track received photo content specifically
   const [receivedPhotoData, setReceivedPhotoData] = useState<{description: string} | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Audio Refs
   const inputAudioContextRef = useRef<AudioContext | null>(null);
   const outputAudioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -245,17 +226,14 @@ const App: React.FC = () => {
   const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   
-  // Gemini & Memory Logic Refs
   const nextStartTimeRef = useRef<number>(0);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const sessionRef = useRef<any>(null); 
   const currentHistoryRef = useRef<HistoryItem[]>([]); 
-  const currentCallerIdRef = useRef<string>(POTENTIAL_CALLERS[0].id); // Track current caller ID for safe saving
-  
-  // Track start time to prevent immediate hangup hallucination
+  const currentCallerIdRef = useRef<string>(POTENTIAL_CALLERS[0].id); 
   const startTimeRef = useRef<number>(0);
+  const cleanupInProgressRef = useRef<boolean>(false);
 
-  // Initialize scores
   useEffect(() => {
     const newScores: { [key: string]: number } = {};
     ['ex_partner', 'friend_sam', 'master_missy'].forEach(id => {
@@ -265,55 +243,34 @@ const App: React.FC = () => {
     setScores(newScores);
   }, []);
 
-  // --- INSTABILITY SIMULATION ---
   useEffect(() => {
     if (appState !== AppState.CONNECTED) {
       setIsGlitching(false);
       return;
     }
-
     const triggerGlitch = () => {
       const duration = 200 + Math.random() * 800; 
       setIsGlitching(true);
       setTimeout(() => setIsGlitching(false), duration);
     };
-
     const loop = setInterval(() => {
-      if (Math.random() > 0.65) { 
-         triggerGlitch();
-      }
+      if (Math.random() > 0.65) triggerGlitch();
     }, 4000);
-
     return () => clearInterval(loop);
   }, [appState]);
 
-
-  // --- MEMORY SYSTEM ---
   const saveMemory = useCallback((callerId: string) => {
     if (currentHistoryRef.current.length === 0) return;
-    
-    // Save Context History
     const recentHistory = currentHistoryRef.current.slice(-15);
     const summary = recentHistory.map(h => `${h.role}: ${h.text}`).join('\n');
     localStorage.setItem(`memory_${callerId}`, summary);
     
-    // Increment Relationship Score
-    // Only increment if there was actual conversation (length > 2)
     if (currentHistoryRef.current.length > 2) {
         const currentScore = parseInt(localStorage.getItem(`relationship_score_${callerId}`) || '0');
         const nextScore = Math.min(currentScore + 1, MAX_RELATIONSHIP_SCORE);
-        
         localStorage.setItem(`relationship_score_${callerId}`, nextScore.toString());
-        
-        // Update state to reflect immediately
-        setScores(prev => ({
-            ...prev,
-            [callerId]: nextScore
-        }));
-        
-        console.log(`Relationship level for ${callerId} increased to ${nextScore}`);
+        setScores(prev => ({ ...prev, [callerId]: nextScore }));
     }
-
     currentHistoryRef.current = [];
   }, []);
 
@@ -323,71 +280,47 @@ const App: React.FC = () => {
     return { memory, score };
   }, []);
 
-  // --- RANDOM CALL SYSTEM ---
   const prepareRandomCaller = useCallback(() => {
       const rand = Math.random();
-      
-      // 40% Chance Missy or Legacy Character (Villain/Legacy)
+      // 40% Chance Missy or Legacy Character
       if (rand > 0.60) {
-         // Combine Villains (Missy) and Legacy (River, Davros, etc.)
          const specialCallers = POTENTIAL_CALLERS.filter(c => c.type === 'VILLAIN' || c.type === 'LEGACY');
          const selected = specialCallers[Math.floor(Math.random() * specialCallers.length)];
-
          if (selected && selected.scenarios) {
              const randomScenario = selected.scenarios[Math.floor(Math.random() * selected.scenarios.length)];
-             setCaller({
-                 ...selected,
-                 currentScenario: randomScenario
-             });
+             setCaller({ ...selected, currentScenario: randomScenario });
          }
       } 
       // 20% Chance Doctor
       else if (rand > 0.40) {
          const randomAdventure = DOCTOR_ADVENTURES[Math.floor(Math.random() * DOCTOR_ADVENTURES.length)];
-         setCaller({
-            ...POTENTIAL_CALLERS[0],
-            adventure: randomAdventure
-         });
+         setCaller({ ...POTENTIAL_CALLERS[0], adventure: randomAdventure });
       }
       // 20% Chance Earth Caller
       else if (rand > 0.20) {
          const earthCallers = POTENTIAL_CALLERS.filter(c => c.type === 'EARTH');
          const selected = earthCallers[Math.floor(Math.random() * earthCallers.length)];
-         
          const isWeird = Math.random() > 0.6;
          let adventure = undefined;
          let currentScenario = undefined;
-         
          if (isWeird) {
              adventure = EARTH_WEIRD_EVENTS[Math.floor(Math.random() * EARTH_WEIRD_EVENTS.length)];
          } else if (selected.scenarios && selected.scenarios.length > 0) {
-             // Pick a random scenario from the pool
              currentScenario = selected.scenarios[Math.floor(Math.random() * selected.scenarios.length)];
          }
-
-         setCaller({
-             ...selected,
-             adventure: adventure,
-             currentScenario: currentScenario
-         });
+         setCaller({ ...selected, adventure: adventure, currentScenario: currentScenario });
       } 
-      // 20% Chance VIP (increased for variety)
+      // 20% Chance VIP
       else {
          const vip = VIP_CALLERS[Math.floor(Math.random() * VIP_CALLERS.length)];
-         // Select a dynamic scenario for the specific VIP ID
          const scenarios = VIP_SCENARIOS[vip.id as keyof typeof VIP_SCENARIOS];
          const randomScenario = scenarios ? scenarios[Math.floor(Math.random() * scenarios.length)] : "Unknown crisis.";
-         
-         setCaller({
-             ...vip,
-             currentScenario: randomScenario
-         });
+         setCaller({ ...vip, currentScenario: randomScenario });
       }
   }, []);
 
   useEffect(() => {
     if (appState === AppState.IDLE) {
-      // 30s to 90s delay
       const randomTime = Math.random() * 60000 + 30000; 
       const timeout = setTimeout(() => {
         prepareRandomCaller();
@@ -398,64 +331,37 @@ const App: React.FC = () => {
   }, [appState, prepareRandomCaller]);
 
   const stopAudio = useCallback(() => {
+    if (cleanupInProgressRef.current) return;
+    cleanupInProgressRef.current = true;
+
     if (sessionRef.current) {
       try { sessionRef.current.close(); } catch (e) { console.debug(e); }
       sessionRef.current = null;
     }
     
-    // Save memory for the caller that was just active
     saveMemory(currentCallerIdRef.current);
 
-    sourcesRef.current.forEach(source => {
-      try { source.stop(); } catch(e) {}
-    });
+    sourcesRef.current.forEach(source => { try { source.stop(); } catch(e) {} });
     sourcesRef.current.clear();
 
-    if (sourceRef.current) {
-      try { sourceRef.current.disconnect(); } catch(e) {}
-      sourceRef.current = null;
-    }
-
-    if (scriptProcessorRef.current) {
-      try {
-        scriptProcessorRef.current.disconnect();
-        scriptProcessorRef.current.onaudioprocess = null;
-      } catch(e) {}
-      scriptProcessorRef.current = null;
-    }
-
-    if (inputAudioContextRef.current) {
-      try { inputAudioContextRef.current.close(); } catch(e) {}
-      inputAudioContextRef.current = null;
-    }
-    if (outputAudioContextRef.current) {
-      try { outputAudioContextRef.current.close(); } catch(e) {}
-      outputAudioContextRef.current = null;
-    }
-    
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
+    if (sourceRef.current) { try { sourceRef.current.disconnect(); } catch(e) {} sourceRef.current = null; }
+    if (scriptProcessorRef.current) { try { scriptProcessorRef.current.disconnect(); scriptProcessorRef.current.onaudioprocess = null; } catch(e) {} scriptProcessorRef.current = null; }
+    if (inputAudioContextRef.current) { try { inputAudioContextRef.current.close(); } catch(e) {} inputAudioContextRef.current = null; }
+    if (outputAudioContextRef.current) { try { outputAudioContextRef.current.close(); } catch(e) {} outputAudioContextRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach(track => track.stop()); streamRef.current = null; }
 
     analyserRef.current = null;
     nextStartTimeRef.current = 0;
+    cleanupInProgressRef.current = false;
   }, [saveMemory]);
 
   const handleEndCall = useCallback(() => {
-    const duration = Date.now() - startTimeRef.current;
-    
-    // Safety check: If call ends within 5 seconds, it might be a connection drop.
-    // However, if we are here, we must cleanup.
-    console.log(`Call ended. Duration: ${duration}ms`);
-
+    console.log(`Call ending. Duration: ${Date.now() - startTimeRef.current}ms`);
     stopAudio();
     setAppState(AppState.IDLE);
     setPendingPhoto(null);
     setReceivedPhotoData(null);
-    setTimeout(() => {
-      setCaller(POTENTIAL_CALLERS[0]);
-    }, 1000); 
+    setTimeout(() => { setCaller(POTENTIAL_CALLERS[0]); }, 1000); 
   }, [stopAudio]);
 
   const startConversation = async (specificCaller?: CallerIdentity) => {
@@ -466,20 +372,14 @@ const App: React.FC = () => {
       
       const activeCaller = specificCaller || caller;
       setCaller(activeCaller);
-      currentCallerIdRef.current = activeCaller.id; // Store ID for safe saving later
+      currentCallerIdRef.current = activeCaller.id; 
 
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
-      // Explicit try/catch for microphone permission
       let stream: MediaStream;
       try {
           stream = await navigator.mediaDevices.getUserMedia({ 
-            audio: {
-              sampleRate: 16000,
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true
-            } 
+            audio: { sampleRate: 16000, echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
           });
           streamRef.current = stream;
       } catch (err) {
@@ -491,10 +391,8 @@ const App: React.FC = () => {
 
       const inputCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
       const outputCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
-      
       await inputCtx.resume();
       await outputCtx.resume();
-
       inputAudioContextRef.current = inputCtx;
       outputAudioContextRef.current = outputCtx;
 
@@ -509,10 +407,7 @@ const App: React.FC = () => {
       const scriptProcessor = inputCtx.createScriptProcessor(4096, 1, 1);
       scriptProcessorRef.current = scriptProcessor;
       
-      // LOAD SPECIFIC MEMORY AND SCORE
       const { memory, score } = loadMemory(activeCaller.id);
-      console.log(`Loading profile for ${activeCaller.name}: Score ${score}`);
-
       const systemInstruction = getSystemInstruction(activeCaller, memory, score);
 
       const sessionPromise = ai.live.connect({
@@ -522,47 +417,42 @@ const App: React.FC = () => {
             console.log("Connection Established");
             setAppState(AppState.CONNECTED);
 
-            // 1. IF USER SENT A PHOTO, SEND IT IMMEDIATELY
+            // 1. Send Image if available
             if (activeCaller.initialImage) {
-                 const imageBlob = {
-                     mimeType: "image/jpeg",
-                     data: activeCaller.initialImage
-                 };
-                 // Send image frame
-                 sessionPromise.then(session => {
-                    session.sendRealtimeInput({ media: imageBlob });
-                 });
-                 // Reset after sending
+                 sessionPromise.then(session => session.sendRealtimeInput({ media: { mimeType: "image/jpeg", data: activeCaller.initialImage } }));
                  setPendingPhoto(null);
             }
 
-            // 2. SEND SILENCE TO WAKE UP MODEL (Force it to speak first)
-            // INCREASED DELAY AND BUFFER SIZE TO PREVENT IMMEDIATE DISCONNECT
+            // 2. STABILITY FIX: Send Silence Header + TEXT TRIGGER
+            // Sending text forces the model to acknowledge the turn and start speaking.
             setTimeout(() => {
-              // 1 second of silence to ensure VAD detects activity
-              const silence = new Float32Array(16000); 
-              const pcmBlob = createBlob(silence);
-              
-              sessionPromise.then(session => {
-                session.sendRealtimeInput({ media: pcmBlob });
-              }).catch(e => console.warn("Failed to send initial silence", e));
-            }, 500); // 500ms delay
+               sessionPromise.then(session => {
+                   // A. Send Silence
+                   const silence = new Float32Array(16000);
+                   session.sendRealtimeInput({ media: createBlob(silence) });
 
-            scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
-              const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-              const pcmBlob = createBlob(inputData);
+                   // B. Send Text Trigger
+                   session.sendRealtimeInput({
+                       clientContent: {
+                           turns: [{ role: 'user', parts: [{ text: "The user has picked up the phone. Speak immediately." }] }],
+                           turnComplete: true
+                       }
+                   });
+               });
+            }, 200);
+
+            scriptProcessor.onaudioprocess = (e) => {
+              if (cleanupInProgressRef.current) return;
+              const inputData = e.inputBuffer.getChannelData(0);
               sessionPromise.then((session) => {
-                 session.sendRealtimeInput({ media: pcmBlob });
-              }).catch(e => {
-                // Suppress errors during disconnect
-              });
+                 session.sendRealtimeInput({ media: createBlob(inputData) });
+              }).catch(() => {});
             };
             
             source.connect(scriptProcessor);
             scriptProcessor.connect(inputCtx.destination);
           },
           onmessage: async (message: LiveServerMessage) => {
-            // TOOL HANDLING (RECEIVE PHOTO)
             if (message.toolCall) {
                 const calls = message.toolCall.functionCalls;
                 if (calls) {
@@ -571,74 +461,46 @@ const App: React.FC = () => {
                             const description = (call.args as any)?.description || "Unknown visual data";
                             setReceivedPhotoData({ description });
                             sessionPromise.then(s => s.sendToolResponse({
-                                functionResponses: {
-                                    id: call.id,
-                                    name: call.name,
-                                    response: { result: "Image received on psychic paper." }
-                                }
+                                functionResponses: { id: call.id, name: call.name, response: { result: "Image received." } }
                             }));
                         }
                     });
                 }
             }
-
-            const base64Audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-            if (base64Audio) {
+            if (message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data) {
                if (!outputCtx) return;
+               const base64Audio = message.serverContent.modelTurn.parts[0].inlineData.data;
                nextStartTimeRef.current = Math.max(nextStartTimeRef.current, outputCtx.currentTime);
                const audioBuffer = await decodeAudioData(decode(base64Audio), outputCtx, 24000, 1);
                const node = outputCtx.createBufferSource();
                node.buffer = audioBuffer;
                node.connect(outputCtx.destination);
-               node.addEventListener('ended', () => {
-                 sourcesRef.current.delete(node);
-               });
                node.start(nextStartTimeRef.current);
                nextStartTimeRef.current += audioBuffer.duration;
-               sourcesRef.current.add(node);
             }
-
-            const modelText = message.serverContent?.outputTranscription?.text;
-            if (modelText) currentHistoryRef.current.push({ role: 'model', text: modelText });
-            
-            const userText = message.serverContent?.inputTranscription?.text;
-            if (userText) currentHistoryRef.current.push({ role: 'user', text: userText });
-
-            if (message.serverContent?.interrupted) {
-              sourcesRef.current.forEach(s => s.stop());
-              sourcesRef.current.clear();
-              nextStartTimeRef.current = 0;
-            }
-            
-            // Check for turn completion - if model ended turn without hanging up, that's good.
-            // If the server sends a close signal or similar, onclose will trigger.
+            if (message.serverContent?.outputTranscription?.text) currentHistoryRef.current.push({ role: 'model', text: message.serverContent.outputTranscription.text });
+            if (message.serverContent?.inputTranscription?.text) currentHistoryRef.current.push({ role: 'user', text: message.serverContent.inputTranscription.text });
+            if (message.serverContent?.interrupted) nextStartTimeRef.current = 0;
           },
           onclose: () => {
              console.log("Connection Closed by Server");
-             // Prevent immediate hangup loop:
-             // If connection closes too fast (server error), we just handle end call.
-             // We can't really force it open.
              handleEndCall();
           },
           onerror: (err) => {
              console.error("Connection Error", err);
+             // Do not immediately kill app state on minor errors if possible
           }
         },
         config: {
           tools: [{ functionDeclarations: [SEND_PHOTO_TOOL] }],
-          responseModalities: [Modality.AUDIO],
+          responseModalities: [Modality.AUDIO], 
           inputAudioTranscription: {}, 
           outputAudioTranscription: {}, 
-          speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: activeCaller.voiceName || 'Puck' } }
-          },
-          // Correctly wrapped System Instruction for schema validation
-          systemInstruction: { parts: [{ text: systemInstruction }] },
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: activeCaller.voiceName || 'Puck' } } },
+          systemInstruction: systemInstruction,
         }
       });
-      
       sessionRef.current = await sessionPromise;
-
     } catch (error) {
       console.error("Failed to start conversation:", error);
       setAppState(AppState.ERROR);
@@ -647,89 +509,44 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAnswerCall = () => {
-    startConversation();
-  };
-
-  // --- PHOTO UPLOAD HANDLING ---
+  const handleAnswerCall = () => { startConversation(); };
   const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
      if (event.target.files && event.target.files[0]) {
-         const file = event.target.files[0];
          const reader = new FileReader();
-         reader.onloadend = () => {
-             const base64String = reader.result as string;
-             // Strip the data URL prefix (e.g. "data:image/jpeg;base64,")
-             const base64Data = base64String.split(',')[1];
-             setPendingPhoto(base64Data);
-             setShowRecipientModal(true);
-         };
-         reader.readAsDataURL(file);
+         reader.onloadend = () => { setPendingPhoto((reader.result as string).split(',')[1]); setShowRecipientModal(true); };
+         reader.readAsDataURL(event.target.files[0]);
      }
   };
-
   const handlePhotoRecipientSelect = (callerId: string) => {
       setShowRecipientModal(false);
-      
-      // Find the caller
-      let selectedCaller = POTENTIAL_CALLERS.find(c => c.id === callerId);
-      if (!selectedCaller) selectedCaller = POTENTIAL_CALLERS[0]; // Fallback to Doctor
-
-      // If needed, assign a random scenario if not Doctor
+      let selectedCaller = POTENTIAL_CALLERS.find(c => c.id === callerId) || POTENTIAL_CALLERS[0];
       let activeCaller = { ...selectedCaller };
       if (activeCaller.scenarios && activeCaller.scenarios.length > 0) {
-          const randScenario = activeCaller.scenarios[Math.floor(Math.random() * activeCaller.scenarios.length)];
-          activeCaller = { ...activeCaller, currentScenario: randScenario };
+          activeCaller = { ...activeCaller, currentScenario: activeCaller.scenarios[Math.floor(Math.random() * activeCaller.scenarios.length)] };
       } else if (activeCaller.type === 'DOCTOR') {
           activeCaller = { ...activeCaller, adventure: DOCTOR_ADVENTURES[Math.floor(Math.random() * DOCTOR_ADVENTURES.length)] };
       }
-
-      // Attach image
       activeCaller.initialImage = pendingPhoto || undefined;
-      
-      // Start call
       startConversation(activeCaller);
   };
 
-  const handleRequestPhoto = () => {
-      if (sessionRef.current) {
-          // Trigger visual cue only; Gemini Live text injection is limited.
-          // We rely on user voice or tool use initiated by the user's verbal request.
-          // This button acts as a user intent signal if we could inject text, but for now it is visual.
-      }
-  };
-  
   const handleManualCall = () => {
     const doctor = POTENTIAL_CALLERS[0];
-    const randomAdventure = DOCTOR_ADVENTURES[Math.floor(Math.random() * DOCTOR_ADVENTURES.length)];
-    const activeDoctor = { ...doctor, adventure: randomAdventure };
+    const activeDoctor = { ...doctor, adventure: DOCTOR_ADVENTURES[Math.floor(Math.random() * DOCTOR_ADVENTURES.length)] };
     startConversation(activeDoctor);
   };
 
   const handleCallEx = () => {
-    const exPartner = POTENTIAL_CALLERS.find(c => c.id === 'ex_partner');
-    if (exPartner && exPartner.scenarios) {
-        const randomScenario = exPartner.scenarios[Math.floor(Math.random() * exPartner.scenarios.length)];
-        const activeEx = { ...exPartner, currentScenario: randomScenario };
-        startConversation(activeEx);
-    }
+    const ex = POTENTIAL_CALLERS.find(c => c.id === 'ex_partner');
+    if (ex && ex.scenarios) startConversation({ ...ex, currentScenario: ex.scenarios[Math.floor(Math.random() * ex.scenarios.length)] });
   };
-
   const handleCallFriend = () => {
     const friend = POTENTIAL_CALLERS.find(c => c.id === 'friend_sam');
-    if (friend && friend.scenarios) {
-        const randomScenario = friend.scenarios[Math.floor(Math.random() * friend.scenarios.length)];
-        const activeFriend = { ...friend, currentScenario: randomScenario };
-        startConversation(activeFriend);
-    }
+    if (friend && friend.scenarios) startConversation({ ...friend, currentScenario: friend.scenarios[Math.floor(Math.random() * friend.scenarios.length)] });
   };
-
   const handleCallMaster = () => {
     const master = POTENTIAL_CALLERS.find(c => c.id === 'master_missy');
-    if (master && master.scenarios) {
-        const randomScenario = master.scenarios[Math.floor(Math.random() * master.scenarios.length)];
-        const activeMaster = { ...master, currentScenario: randomScenario };
-        startConversation(activeMaster);
-    }
+    if (master && master.scenarios) startConversation({ ...master, currentScenario: master.scenarios[Math.floor(Math.random() * master.scenarios.length)] });
   };
 
   return (
@@ -737,22 +554,8 @@ const App: React.FC = () => {
       <div className="absolute inset-0 z-50 crt-overlay h-full w-full pointer-events-none"></div>
       <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/40 via-black to-black"></div>
       <GhostTardis />
-
-      {/* MODALS */}
-      {showRecipientModal && (
-        <RecipientSelector 
-            onSelect={handlePhotoRecipientSelect} 
-            onCancel={() => { setShowRecipientModal(false); setPendingPhoto(null); }} 
-        />
-      )}
-      
-      {receivedPhotoData && (
-         <ReceivedPhotoOverlay 
-           description={receivedPhotoData.description} 
-           onClose={() => setReceivedPhotoData(null)} 
-         />
-      )}
-      
+      {showRecipientModal && ( <RecipientSelector onSelect={handlePhotoRecipientSelect} onCancel={() => { setShowRecipientModal(false); setPendingPhoto(null); }} /> )}
+      {receivedPhotoData && ( <ReceivedPhotoOverlay description={receivedPhotoData.description} onClose={() => setReceivedPhotoData(null)} /> )}
       {permissionError && (
           <div className="absolute top-10 z-50 bg-red-900 border border-red-500 text-white p-4 rounded shadow-lg max-w-sm text-center">
               <p className="font-bold mb-2">MICROPHONE ACCESS DENIED</p>
@@ -760,209 +563,102 @@ const App: React.FC = () => {
               <button onClick={() => setPermissionError(false)} className="mt-4 px-4 py-1 bg-red-700 rounded text-xs">DISMISS</button>
           </div>
       )}
-
-      {/* HIDDEN FILE INPUT */}
-      <input 
-        type="file" 
-        ref={fileInputRef}
-        onChange={handlePhotoUpload}
-        accept="image/*"
-        className="hidden"
-      />
+      <input type="file" ref={fileInputRef} onChange={handlePhotoUpload} accept="image/*" className="hidden" />
 
       <div className="relative z-20 w-full max-w-4xl h-full flex flex-col items-center justify-between py-12">
-        
-        {/* Header */}
         <div className="text-center space-y-2 mt-8">
-           <h1 className={`text-4xl md:text-6xl font-['Audiowide'] text-cyan-400 tracking-wider shadow-[0_0_15px_rgba(34,211,238,0.5)] ${isGlitching ? 'opacity-50 blur-sm' : ''}`}>
-             T.A.R.D.I.S.
-           </h1>
-           <p className="text-sm font-['Share_Tech_Mono'] text-blue-200 uppercase tracking-[0.2em]">
-             Type 40 • Time Travel Capsule • Audio Link
-           </p>
-           {isGlitching && (
-              <p className="text-red-500 font-bold animate-pulse text-xs bg-black/80 inline-block px-2">
-                 ⚠ SIGNAL UNSTABLE ⚠
-              </p>
-           )}
+           <h1 className={`text-4xl md:text-6xl font-['Audiowide'] text-cyan-400 tracking-wider shadow-[0_0_15px_rgba(34,211,238,0.5)] ${isGlitching ? 'opacity-50 blur-sm' : ''}`}>T.A.R.D.I.S.</h1>
+           <p className="text-sm font-['Share_Tech_Mono'] text-blue-200 uppercase tracking-[0.2em]">Type 40 • Time Travel Capsule • Audio Link</p>
+           {isGlitching && ( <p className="text-red-500 font-bold animate-pulse text-xs bg-black/80 inline-block px-2">⚠ SIGNAL UNSTABLE ⚠</p> )}
         </div>
-
-        {/* Central Visualization */}
         <div className="relative w-80 h-80 flex items-center justify-center">
            <div className={`absolute w-full h-full border-4 border-cyan-900/30 rounded-full animate-[spin_10s_linear_infinite] ${isGlitching ? 'border-red-900/50' : ''}`}></div>
            <div className="absolute w-3/4 h-3/4 border-2 border-dashed border-cyan-500/20 rounded-full animate-[spin_15s_linear_infinite_reverse]"></div>
-           
-           <ParticleVisualizer 
-              analyser={analyserRef.current} 
-              isActive={appState === AppState.CONNECTED}
-              isGlitching={isGlitching}
-           />
-           
+           <ParticleVisualizer analyser={analyserRef.current} isActive={appState === AppState.CONNECTED} isGlitching={isGlitching} />
            <div className="absolute z-20 text-center pointer-events-none">
-              {appState === AppState.IDLE && (
-                 <span className="text-blue-500/50 text-xs animate-pulse">Awaiting Input...</span>
-              )}
-              {appState === AppState.CONNECTING && (
-                 <span className="text-orange-400 text-lg animate-pulse font-bold">MATERIALIZING...</span>
-              )}
+              {appState === AppState.IDLE && ( <span className="text-blue-500/50 text-xs animate-pulse">Awaiting Input...</span> )}
+              {appState === AppState.CONNECTING && ( <span className="text-orange-400 text-lg animate-pulse font-bold">MATERIALIZING...</span> )}
               {appState === AppState.INCOMING_CALL && (
                  <div className="flex flex-col items-center gap-2">
                     <div className="w-16 h-16 bg-red-500 rounded-full animate-ping absolute opacity-20"></div>
                     <span className="text-red-500 font-bold text-xl animate-bounce">INCOMING TRANSMISSION</span>
-                    <span className="text-sm text-red-300 font-mono border border-red-900 bg-black/50 px-2 py-1 rounded">
-                       ORIGIN: {caller.name.toUpperCase()}
-                    </span>
+                    <span className="text-sm text-red-300 font-mono border border-red-900 bg-black/50 px-2 py-1 rounded">ORIGIN: {caller.name.toUpperCase()}</span>
                  </div>
               )}
               {appState === AppState.CONNECTED && (
                  <div className="flex flex-col items-center gap-1">
-                    <span className={`${isGlitching ? 'text-red-500' : 'text-cyan-300'} font-bold tracking-widest text-xs transition-colors`}>
-                       {isGlitching ? 'SIGNAL CRITICAL' : 'LINK ESTABLISHED'}
-                    </span>
+                    <span className={`${isGlitching ? 'text-red-500' : 'text-cyan-300'} font-bold tracking-widest text-xs transition-colors`}>{isGlitching ? 'SIGNAL CRITICAL' : 'LINK ESTABLISHED'}</span>
                     <span className="text-cyan-600 text-[10px]">{caller.name}</span>
                  </div>
               )}
            </div>
         </div>
-
-        {/* Controls Section */}
         <div className="w-full max-w-md p-6 border border-cyan-900/50 bg-black/40 backdrop-blur-sm rounded-xl">
            <div className="flex justify-center items-center gap-6">
-              
               {appState === AppState.IDLE && (
                 <>
-                    {/* DOCTOR */}
                     <div className="flex flex-col items-center justify-end h-full">
-                       <button 
-                        onClick={handleManualCall}
-                        className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105"
-                        aria-label="Call The Doctor"
-                      >
-                        <div className="w-16 h-16 rounded-full bg-cyan-900 border-4 border-cyan-400 flex items-center justify-center shadow-[0_0_20px_rgba(34,211,238,0.3)] group-hover:shadow-[0_0_50px_rgba(34,211,238,0.6)] transition-all">
-                          <PhoneIcon />
-                        </div>
+                       <button onClick={handleManualCall} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105" aria-label="Call The Doctor">
+                        <div className="w-16 h-16 rounded-full bg-cyan-900 border-4 border-cyan-400 flex items-center justify-center shadow-[0_0_20px_rgba(34,211,238,0.3)] group-hover:shadow-[0_0_50px_rgba(34,211,238,0.6)] transition-all"><PhoneIcon /></div>
                         <span className="text-cyan-400 font-bold tracking-widest text-[10px] group-hover:text-cyan-200">DOCTOR</span>
                       </button>
                     </div>
-
-                    {/* UPLOAD PHOTO BUTTON */}
                     <div className="flex flex-col items-center justify-end h-full">
-                      <button 
-                        onClick={() => fileInputRef.current?.click()}
-                        className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105"
-                        aria-label="Send Photo"
-                      >
-                        <div className="w-16 h-16 rounded-full bg-blue-900 border-4 border-blue-400 flex items-center justify-center shadow-[0_0_20px_rgba(96,165,250,0.3)] group-hover:shadow-[0_0_50px_rgba(96,165,250,0.6)] transition-all">
-                          <CameraIcon />
-                        </div>
+                      <button onClick={() => fileInputRef.current?.click()} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105" aria-label="Send Photo">
+                        <div className="w-16 h-16 rounded-full bg-blue-900 border-4 border-blue-400 flex items-center justify-center shadow-[0_0_20px_rgba(96,165,250,0.3)] group-hover:shadow-[0_0_50px_rgba(96,165,250,0.6)] transition-all"><CameraIcon /></div>
                         <span className="text-blue-400 font-bold tracking-widest text-[10px] group-hover:text-blue-200">SEND IMG</span>
                       </button>
                     </div>
-
-                    {/* BESTIE */}
                     <div className="flex flex-col items-center justify-end h-full">
                       <AffectionMeter score={scores['friend_sam'] || 1} color="bg-pink-500" />
-                      <button 
-                        onClick={handleCallFriend}
-                        className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105"
-                        aria-label="Call Bestie"
-                      >
-                        <div className="w-16 h-16 rounded-full bg-pink-900 border-4 border-pink-400 flex items-center justify-center shadow-[0_0_20px_rgba(244,114,182,0.3)] group-hover:shadow-[0_0_50px_rgba(244,114,182,0.6)] transition-all">
-                          <StarIcon />
-                        </div>
+                      <button onClick={handleCallFriend} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105" aria-label="Call Bestie">
+                        <div className="w-16 h-16 rounded-full bg-pink-900 border-4 border-pink-400 flex items-center justify-center shadow-[0_0_20px_rgba(244,114,182,0.3)] group-hover:shadow-[0_0_50px_rgba(244,114,182,0.6)] transition-all"><StarIcon /></div>
                         <span className="text-pink-400 font-bold tracking-widest text-[10px] group-hover:text-pink-200">BESTIE</span>
                       </button>
                     </div>
-
-                    {/* EX */}
                     <div className="flex flex-col items-center justify-end h-full">
                       <AffectionMeter score={scores['ex_partner'] || 1} color="bg-purple-500" />
-                      <button 
-                        onClick={handleCallEx}
-                        className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105"
-                        aria-label="Call Ex"
-                      >
-                        <div className="w-16 h-16 rounded-full bg-purple-900 border-4 border-purple-400 flex items-center justify-center shadow-[0_0_20px_rgba(192,132,252,0.3)] group-hover:shadow-[0_0_50px_rgba(192,132,252,0.6)] transition-all">
-                          <BrokenHeartIcon />
-                        </div>
+                      <button onClick={handleCallEx} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105" aria-label="Call Ex">
+                        <div className="w-16 h-16 rounded-full bg-purple-900 border-4 border-purple-400 flex items-center justify-center shadow-[0_0_20px_rgba(192,132,252,0.3)] group-hover:shadow-[0_0_50px_rgba(192,132,252,0.6)] transition-all"><BrokenHeartIcon /></div>
                         <span className="text-purple-400 font-bold tracking-widest text-[10px] group-hover:text-purple-200">EX</span>
                       </button>
                     </div>
-
-                    {/* MISSY */}
                     <div className="flex flex-col items-center justify-end h-full">
                       <AffectionMeter score={scores['master_missy'] || 1} color="bg-green-500" />
-                      <button 
-                        onClick={handleCallMaster}
-                        className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105"
-                        aria-label="Call Missy"
-                      >
-                        <div className="w-16 h-16 rounded-full bg-green-900 border-4 border-green-400 flex items-center justify-center shadow-[0_0_20px_rgba(74,222,128,0.3)] group-hover:shadow-[0_0_50px_rgba(74,222,128,0.6)] transition-all">
-                          <SkullIcon />
-                        </div>
+                      <button onClick={handleCallMaster} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105" aria-label="Call Missy">
+                        <div className="w-16 h-16 rounded-full bg-green-900 border-4 border-green-400 flex items-center justify-center shadow-[0_0_20px_rgba(74,222,128,0.3)] group-hover:shadow-[0_0_50px_rgba(74,222,128,0.6)] transition-all"><SkullIcon /></div>
                         <span className="text-green-400 font-bold tracking-widest text-[10px] group-hover:text-green-200">MISSY</span>
                       </button>
                     </div>
                 </>
               )}
-
               {appState === AppState.INCOMING_CALL && (
-                <button 
-                  onClick={handleAnswerCall}
-                  className="group relative flex flex-col items-center gap-2 animate-bounce"
-                >
-                  <div className="w-24 h-24 rounded-full bg-orange-600 border-4 border-orange-400 flex items-center justify-center shadow-[0_0_30px_rgba(255,165,0,0.6)]">
-                     <PhoneIcon />
-                  </div>
+                <button onClick={handleAnswerCall} className="group relative flex flex-col items-center gap-2 animate-bounce">
+                  <div className="w-24 h-24 rounded-full bg-orange-600 border-4 border-orange-400 flex items-center justify-center shadow-[0_0_30px_rgba(255,165,0,0.6)]"><PhoneIcon /></div>
                   <span className="text-orange-400 font-bold tracking-widest text-sm">ANSWER</span>
                 </button>
               )}
-
               {(appState === AppState.CONNECTED || appState === AppState.CONNECTING) && (
                 <>
-                <button 
-                  onClick={handleEndCall}
-                  className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105"
-                >
-                  <div className="w-20 h-20 rounded-full bg-red-900 border-2 border-red-500 flex items-center justify-center shadow-[0_0_20px_rgba(239,68,68,0.3)] group-hover:shadow-[0_0_40px_rgba(239,68,68,0.6)]">
-                     <PhoneOffIcon />
-                  </div>
+                <button onClick={handleEndCall} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105">
+                  <div className="w-20 h-20 rounded-full bg-red-900 border-2 border-red-500 flex items-center justify-center shadow-[0_0_20px_rgba(239,68,68,0.3)] group-hover:shadow-[0_0_40px_rgba(239,68,68,0.6)]"><PhoneOffIcon /></div>
                   <span className="text-red-500 font-bold tracking-widest text-xs">SEVER LINK</span>
                 </button>
-                
-                {/* REQUEST PHOTO BUTTON (VISUAL CUE) */}
-                <button 
-                  onClick={handleRequestPhoto}
-                  className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105"
-                  title="Ask for a photo (Speak: 'Send me a photo')"
-                >
-                  <div className="w-16 h-16 rounded-full bg-cyan-900/50 border-2 border-cyan-400 flex items-center justify-center shadow-[0_0_20px_rgba(34,211,238,0.2)]">
-                     <DownloadIcon />
-                  </div>
+                <button onClick={() => {}} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105" title="Ask for a photo">
+                  <div className="w-16 h-16 rounded-full bg-cyan-900/50 border-2 border-cyan-400 flex items-center justify-center shadow-[0_0_20px_rgba(34,211,238,0.2)]"><DownloadIcon /></div>
                   <span className="text-cyan-400 font-bold tracking-widest text-[8px]">REQ IMG</span>
                 </button>
                 </>
               )}
-
            </div>
-
            <div className="mt-6 border-t border-cyan-900/50 pt-4">
               <div className="flex justify-between text-xs text-cyan-600 font-mono">
                 <span>FREQ: {isGlitching ? 'DRIFTING...' : (appState === AppState.CONNECTED ? 'LOCKED' : 'SCANNING')}</span>
-                <span>CHRONO: {new Date().toLocaleTimeString()}</span>
               </div>
            </div>
         </div>
-
       </div>
-      
-      {appState === AppState.ERROR && (
-        <div className="absolute bottom-10 bg-red-900/80 border border-red-500 text-white px-6 py-4 rounded animate-pulse z-50">
-           CRITICAL ERROR IN PSYCHIC PAPER. PLEASE REFRESH.
-        </div>
-      )}
     </div>
   );
 };
-
 export default App;

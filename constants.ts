@@ -1,6 +1,6 @@
 
 import { CallerIdentity } from "./types";
-import { FunctionDeclaration } from "@google/genai";
+import { FunctionDeclaration, Type } from "@google/genai";
 
 export const DOCTOR_VOICE_NAME = 'Puck'; 
 export const TARDIS_BLUE = '#003b6f';
@@ -10,7 +10,7 @@ export const PARTICLE_GOLD = 'rgba(255, 215, 0, 0.8)';
 export const PARTICLE_BLUE = 'rgba(0, 191, 255, 0.8)';
 export const MAX_RELATIONSHIP_SCORE = 10;
 
-// Use string literals for types to avoid Enum serialization issues
+// Use string literals for strict schema validation to prevent Network Errors
 export const SEND_PHOTO_TOOL: FunctionDeclaration = {
   name: "sendPhoto",
   description: "Send a visual image/photo of your current surroundings or an object to the user.",
@@ -239,11 +239,12 @@ export const getSystemInstruction = (caller: CallerIdentity, previousContext: st
     Your identity is: ${caller.name}.
     
     CRITICAL CONVERSATION RULES:
-    1. **SPEAK FIRST IMMEDIATELY**: As soon as the connection opens, YOU must start talking. The user has picked up the phone. Ask "Hello?" or "Is anyone there?" immediately.
+    1. **SPEAK FIRST IMMEDIATELY**: As soon as the connection opens, YOU must start talking. The user has picked up the phone. Ask "Hello?" or "Is anyone there?" immediately. Do not wait for the user.
     2. KEEP RESPONSES SHORT. Max 1-3 sentences. No monologues. Speak like a real person in a hurry or in the middle of something.
     3. EXTEND THE CALL. Do not say goodbye. Keep the drama or the mystery going for at least 20 minutes. If the conversation lags, introduce a new complication.
     4. **NEVER HANG UP**: You cannot end the call. Only the user can disconnect. If you need to leave (e.g., running from Daleks), just keep running while talking, or narrate the chaos. Stay on the line no matter what.
     5. **LANGUAGE**: ALWAYS SPEAK ENGLISH. Even if the user replies in another language, you must respond in English. This is an English language practice simulation.
+    6. **STABILITY**: If the audio cuts out or there is silence, assume it is just a bad signal. Say "Are you there?" or "The signal is drifting..." but DO NOT hang up.
     
     TOOLS:
     - You have a 'sendPhoto' tool. Use it if the user asks you to send a photo of your surroundings or where you are.
