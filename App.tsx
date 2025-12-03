@@ -626,7 +626,7 @@ const App: React.FC = () => {
         },
         config: {
           tools: [{ functionDeclarations: [SEND_PHOTO_TOOL] }],
-          responseModalities: ['AUDIO'],
+          responseModalities: [Modality.AUDIO],
           inputAudioTranscription: {}, 
           outputAudioTranscription: {}, 
           speechConfig: {
