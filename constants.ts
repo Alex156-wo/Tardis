@@ -1,6 +1,6 @@
 
 import { CallerIdentity } from "./types";
-import { FunctionDeclaration, Type } from "@google/genai";
+import { FunctionDeclaration } from "@google/genai";
 
 export const DOCTOR_VOICE_NAME = 'Puck'; 
 export const TARDIS_BLUE = '#003b6f';
@@ -10,15 +10,15 @@ export const PARTICLE_GOLD = 'rgba(255, 215, 0, 0.8)';
 export const PARTICLE_BLUE = 'rgba(0, 191, 255, 0.8)';
 export const MAX_RELATIONSHIP_SCORE = 10;
 
-// Use SDK Type enum for strict schema validation
+// Use string literals for strict schema validation
 export const SEND_PHOTO_TOOL: FunctionDeclaration = {
   name: "sendPhoto",
   description: "Send a visual image/photo of your current surroundings or an object to the user.",
   parameters: {
-    type: Type.OBJECT,
+    type: "OBJECT",
     properties: {
       description: {
-        type: Type.STRING,
+        type: "STRING",
         description: "A short text description of what is in the photo you are sending."
       }
     },
@@ -112,6 +112,78 @@ export const POTENTIAL_CALLERS: CallerIdentity[] = [
       "I found a diary entry I don't remember writing. It mentions you. Spoilers!",
       "I'm at a party at the end of the universe. The champagne is excellent, but the host is a Zygon.",
       "I need the Doctor. I've accidentally married a robot king and the honeymoon is dragging on."
+    ]
+  },
+  {
+    id: 'eleventh_doctor',
+    name: 'The 11th Doctor',
+    type: 'LEGACY',
+    voiceName: 'Puck',
+    scenarios: [
+      "Geronimo! I've just crashed into your garden shed. Well, I say crashed, I call it 'parking with style'.",
+      "I'm wearing a fez now. Fezzes are cool. Also, there is a dinosaur in London.",
+      "I need fish fingers and custard immediately. The TARDIS food machine is only dispensing broccoli.",
+      "Something is wrong with time. It's going sideways. Can you check your watch? Does it say 'Yesterday'?"
+    ]
+  },
+  {
+    id: 'captain_jack',
+    name: 'Captain Jack Harkness',
+    type: 'LEGACY',
+    voiceName: 'Fenrir',
+    scenarios: [
+      "Hello! *Flirty tone*. I'm currently hanging off a Torchwood blimp and I thought I'd give you a call.",
+      "I've found some very interesting 51st-century pheromones. Want to test them?",
+      "The Weevils are loose in Cardiff again. I might be a bit late for dinner.",
+      "I've just died and come back to life. Massive headache. Distract me."
+    ]
+  },
+  {
+    id: 'donna_noble',
+    name: 'Donna Noble',
+    type: 'LEGACY',
+    voiceName: 'Kore',
+    scenarios: [
+      "OI! Spaceman! Where have you parked this blue box? I'm missing my temp job interview!",
+      "I am NOT going to Mars. I don't care what you say. It's too red and dusty.",
+      "Someone just called me a 'Time Lord'. Do I look like I own time? I can barely own a diary.",
+      "I've won a lottery ticket but the Doctor says it's alien bait. Tell him he's stupid."
+    ]
+  },
+  {
+    id: 'rose_tyler',
+    name: 'Rose Tyler',
+    type: 'LEGACY',
+    voiceName: 'Kore',
+    scenarios: [
+      "I'm calling from a parallel universe. The signal is weak... I just wanted to hear your voice.",
+      "The Doctor and I are in 1950s London. The TVs are sucking people's faces off.",
+      "I think I saw a Wolf warning written on the wall. Bad Wolf. What does it mean?",
+      "Chips. I really want chips. We've been running from Slitheen for 3 hours."
+    ]
+  },
+  {
+    id: 'amy_pond',
+    name: 'Amy Pond',
+    type: 'LEGACY',
+    voiceName: 'Kore',
+    scenarios: [
+      "The Raggedy Man is eating all my food again. Can you tell him to stop?",
+      "I'm waiting for the Doctor. He said 5 minutes. It's been 12 years.",
+      "There is a crack in my wall. It's glowing. I don't like it.",
+      "Rory keeps dying. It's becoming a habit. Is that normal?"
+    ]
+  },
+  {
+    id: 'cyberman',
+    name: 'Cyberman Unit',
+    type: 'VILLAIN',
+    voiceName: 'Charon',
+    scenarios: [
+      "YOU. WILL. BE. UPGRADED. RESISTANCE IS FUTILE.",
+      "We have detected non-compliant emotions. Explain 'Love'. It is inefficient.",
+      "The Cyberiad is offline. We require a reboot. Press the button on the console.",
+      "Delete. Delete. Delete."
     ]
   },
   {
@@ -224,8 +296,16 @@ const getRelationshipContext = (caller: CallerIdentity, score: number): string =
     return "Relationship: Complex. You are the user's wife/husband from the future/past. You know everything about them, but they know little about you. Flirty and secretive.";
   }
 
-  if (caller.id === 'davros') {
-     return "Relationship: Enemy. You despise the user as an inferior species, yet you are compelled to speak to them.";
+  if (caller.id === 'captain_jack') {
+    return "Relationship: Flirty. You will flirt with anything that moves, including the user.";
+  }
+
+  if (caller.id === 'donna_noble') {
+    return "Relationship: Best Mate. You shout at them when they are stupid, but you care deeply.";
+  }
+
+  if (caller.id === 'davros' || caller.id === 'cyberman') {
+     return "Relationship: Enemy. You despise the user as an inferior species.";
   }
 
   return "Relationship: Neutral.";
@@ -300,8 +380,8 @@ export const getSystemInstruction = (caller: CallerIdentity, previousContext: st
   } else if (caller.type === 'VILLAIN') {
       return `
       ${baseInstruction}
-      PERSONA: Generic Villain / Davros.
-      Mood: Angry, Logical, Superior.
+      PERSONA: ${caller.name}.
+      Mood: Cold, Robotic or Superior (Cyberman/Davros).
       SCENARIO: ${caller.currentScenario}
       `;
   } else if (caller.type === 'LEGACY') {
@@ -316,7 +396,10 @@ export const getSystemInstruction = (caller: CallerIdentity, previousContext: st
        Directives:
        - River Song: Flirty, confident, mysterious. Use the catchphrase "Spoilers!".
        - 4th Doctor: Booming voice, eccentric, offer Jelly Babies.
-       - Davros: Ranting, electronic processing logic, hate for the Doctor.
+       - 11th Doctor: High energy, hand gestures (implied), mentions Fezzes/Bowties, childish enthusiasm.
+       - Captain Jack: Charming, flirty, heroic but cheeky.
+       - Donna Noble: Sassy, shouts a bit, very opinionated, calls the Doctor "Spaceman".
+       - Amy Pond: Scottish (implied), brave, feisty.
     `;
   } else if (caller.type === 'VIP') {
      return `
