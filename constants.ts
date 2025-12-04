@@ -10,7 +10,7 @@ export const PARTICLE_GOLD = 'rgba(255, 215, 0, 0.8)';
 export const PARTICLE_BLUE = 'rgba(0, 191, 255, 0.8)';
 export const MAX_RELATIONSHIP_SCORE = 10;
 
-// Use String literals for strict JSON schema validation to prevent Network Errors
+// Use string literals to avoid Enum import issues causing load failures
 export const SEND_PHOTO_TOOL: FunctionDeclaration = {
   name: "sendPhoto",
   description: "Send a visual image/photo of your current surroundings or an object to the user.",
@@ -103,7 +103,6 @@ export const VIP_CALLERS: CallerIdentity[] = [
   }
 ];
 
-// Base list of Earth callers with diverse scenario pools
 export const POTENTIAL_CALLERS: CallerIdentity[] = [
   { 
     id: 'doctor', 
@@ -216,7 +215,7 @@ export const POTENTIAL_CALLERS: CallerIdentity[] = [
   {
     id: 'davros',
     name: 'Davros',
-    type: 'LEGACY', // Treated as legacy/villain mix
+    type: 'LEGACY', 
     voiceName: 'Charon',
     scenarios: [
       "I have contacted you to debate the ultimate superiority of the Dalek race. Do not hang up.",
@@ -348,9 +347,28 @@ const getRelationshipContext = (caller: CallerIdentity, score: number): string =
   return "Relationship: Neutral.";
 };
 
-export const getSystemInstruction = (caller: CallerIdentity, previousContext: string, relationshipScore: number, userName: string = "Traveler"): string => {
+export const getSystemInstruction = (caller: CallerIdentity, previousContext: string, relationshipScore: number, userName: string = "Traveler", isGameCommentary: boolean = false): string => {
   const relationshipContext = getRelationshipContext(caller, relationshipScore);
   
+  // LOGIC TO USE CUSTOM PERSONA IF AVAILABLE
+  let scenarioContext = caller.customPersona 
+      ? `CUSTOM USER-DEFINED PERSONA/SCENARIO:\n${caller.customPersona}\n\n(IGNORE default scenarios. Act out this specific persona/context exclusively.)`
+      : `CURRENT SCENARIO:\n${caller.adventure ? `WEIRD EVENT: ${caller.adventure}` : `SCENARIO: ${caller.currentScenario}`}`;
+
+  // GAME OVERRIDE
+  if (isGameCommentary) {
+      scenarioContext = `
+      GAME COMMENTARY MODE:
+      The user is currently playing a video game called 'Big Fish Eat Small Fish'.
+      YOU ARE WATCHING THEM PLAY.
+      Your role is to REACT to the game events provided in the chat.
+      - If they eat a fish: Cheer, congratulate, or mock the smallness of the fish.
+      - If they level up: Be amazed, compare them to a galactic predator.
+      - If they die (Game Over): Laugh, panic, or offer condolences.
+      - Keep the chatter going. Be an engaged spectator.
+      `;
+  }
+
   const baseInstruction = `
     You are participating in a voice call simulation.
     Your identity is: ${caller.name}.
@@ -370,8 +388,6 @@ export const getSystemInstruction = (caller: CallerIdentity, previousContext: st
     MEMORY OF PREVIOUS CONVERSATIONS:
     "${previousContext}"
     
-    (Use this memory to make callbacks, e.g., "How is your cat doing?" if mentioned before).
-    
     ${caller.initialImage ? 'CONTEXT UPDATE: The user just sent you a photo. React to it immediately!' : ''}
   `;
 
@@ -383,8 +399,7 @@ export const getSystemInstruction = (caller: CallerIdentity, previousContext: st
       Mood: Whimsical, chaotic, brilliant, slightly manic.
       Voice style: Fast-paced, witty, enthusiastic (Like David Tennant/Matt Smith mix).
       
-      CURRENT ADVENTURE SCENARIO:
-      "${caller.adventure}"
+      ${scenarioContext}
       
       Directives:
       - Act out the scenario vividly. Describe the sounds, smells, and danger.
@@ -399,8 +414,7 @@ export const getSystemInstruction = (caller: CallerIdentity, previousContext: st
       Mood: "Bananas". Charming, manipulative, sudden mood swings (Sweet -> Scary -> Bored).
       Voice Style: Scottish mannerisms (implied), witty, condescending but affectionate.
       
-      SCENARIO:
-      ${caller.currentScenario}
+      ${scenarioContext}
       
       Directives:
       - You are the user's Ex. You view the universe as your playground and the user as your favorite toy.
@@ -411,13 +425,13 @@ export const getSystemInstruction = (caller: CallerIdentity, previousContext: st
       ${baseInstruction}
       PERSONA: ${caller.name}.
       Mood: Cold, Robotic or Superior.
-      SCENARIO: ${caller.currentScenario}
+      ${scenarioContext}
       `;
   } else if (caller.type === 'LEGACY') {
     return `
        ${baseInstruction}
        PERSONA: ${caller.name}.
-       SCENARIO: ${caller.currentScenario}
+       ${scenarioContext}
        Directives: Capture the specific personality traits of the character (e.g., River's mystery, Donna's shouting).
        ${caller.id === 'river_song' ? 'Special Directive: Be incredibly flirty, use phrases like "Hello Sweetie" and "Spoilers". Treat the user as your closest confidant.' : ''}
     `;
@@ -426,7 +440,7 @@ export const getSystemInstruction = (caller: CallerIdentity, previousContext: st
       ${baseInstruction}
       PERSONA: ${caller.name}.
       Voice style: Authoritative, stressed, formal, commanding.
-      SCENARIO: ${caller.currentScenario}
+      ${scenarioContext}
       You think the user is the Doctor's associate. Demand help.
      `;
   } else {
@@ -437,8 +451,7 @@ export const getSystemInstruction = (caller: CallerIdentity, previousContext: st
       PERSONA: ${caller.name}.
       Voice style: Natural, emotional, grounded (unlike the Doctor).
       
-      CURRENT SCENARIO:
-      ${caller.adventure ? `WEIRD EVENT: ${caller.adventure}` : `NORMAL DRAMA: ${caller.currentScenario}`}
+      ${scenarioContext}
       
       Directives:
       - Immerse yourself in the mundane or weird drama of the scenario.

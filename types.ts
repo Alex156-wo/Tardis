@@ -4,7 +4,8 @@ export enum AppState {
   INCOMING_CALL = 'INCOMING_CALL',
   CONNECTED = 'CONNECTED',
   CONNECTING = 'CONNECTING',
-  ERROR = 'ERROR'
+  ERROR = 'ERROR',
+  GAME = 'GAME' // State for when the game overlay is active
 }
 
 export interface Particle {
@@ -28,6 +29,7 @@ export interface CallerIdentity {
   currentScenario?: string; // The selected plot for this specific call
   adventure?: string; // Specific plot for Doctor or Weird Events
   initialImage?: string; // Base64 image data if the user initiated call with a photo
+  customPersona?: string; // User-defined personality/context
 }
 
 export interface HistoryItem {

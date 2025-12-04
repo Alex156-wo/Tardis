@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
+import { GoogleGenAI, LiveServerMessage } from '@google/genai';
 import { AppState, CallerIdentity, HistoryItem } from './types';
 import { 
   getSystemInstruction, 
@@ -14,6 +14,8 @@ import {
 } from './constants';
 import ParticleVisualizer from './components/ParticleVisualizer';
 import { PixelAvatar, AvatarEditor, AvatarConfig, DEFAULT_AVATAR } from './components/PixelAvatar';
+import { ContactEditor } from './components/ContactEditor';
+import { FishGame } from './components/FishGame';
 import { createBlob, decode, decodeAudioData } from './services/audioUtils';
 
 declare global {
@@ -53,6 +55,55 @@ const UserIcon = () => (
 const BookIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
 );
+const GamepadIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="15" y1="13" x2="15.01" y2="13"/><line x1="18" y1="11" x2="18.01" y2="11"/><rect x="2" y="6" width="20" height="12" rx="2"/></svg>
+);
+
+// --- LONG PRESS BUTTON COMPONENT ---
+interface LongPressButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  onLongPress: () => void;
+}
+
+const LongPressButton: React.FC<LongPressButtonProps> = ({ onClick, onLongPress, children, ...props }) => {
+  const [isPressing, setIsPressing] = useState(false);
+  const [isLongPress, setIsLongPress] = useState(false);
+  const timerRef = useRef<any>(null);
+
+  const startPress = useCallback(() => {
+    setIsPressing(true);
+    setIsLongPress(false);
+    timerRef.current = window.setTimeout(() => {
+      setIsLongPress(true);
+      onLongPress();
+    }, 800); 
+  }, [onLongPress]);
+
+  const endPress = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    setIsPressing(false);
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    
+    // Only trigger regular click if it wasn't a long press
+    if (!isLongPress && onClick) {
+      onClick(e as any);
+    }
+  }, [isLongPress, onClick]);
+
+  return (
+    <button
+      onMouseDown={startPress}
+      onMouseUp={endPress}
+      onMouseLeave={endPress}
+      onTouchStart={startPress}
+      onTouchEnd={endPress}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+};
 
 const GhostTardis = () => {
   const [isMaterializing, setIsMaterializing] = useState(false);
@@ -161,10 +212,10 @@ const RecipientSelector = ({ onSelect, onCancel }: { onSelect: (callerId: string
              <span className="text-green-300 font-bold">MISSY</span>
          </button>
          <button onClick={() => onSelect('ex_partner')} className="p-4 border border-purple-500 bg-purple-900/30 hover:bg-purple-800/50 rounded flex flex-col items-center hover:scale-105 transition-all">
-             <span className="text-purple-300 font-bold">EX (JORDAN)</span>
+             <span className="text-purple-300 font-bold">EX</span>
          </button>
          <button onClick={() => onSelect('friend_sam')} className="p-4 border border-pink-500 bg-pink-900/30 hover:bg-pink-800/50 rounded flex flex-col items-center hover:scale-105 transition-all">
-             <span className="text-pink-300 font-bold">BESTIE (SAM)</span>
+             <span className="text-pink-300 font-bold">BESTIE</span>
          </button>
          <button onClick={() => onSelect('river_song')} className="p-4 border border-yellow-500 bg-yellow-900/30 hover:bg-yellow-800/50 rounded flex flex-col items-center hover:scale-105 transition-all col-span-2">
              <span className="text-yellow-300 font-bold">RIVER SONG</span>
@@ -175,27 +226,51 @@ const RecipientSelector = ({ onSelect, onCancel }: { onSelect: (callerId: string
   );
 };
 
+const GamePartnerSelector = ({ onSelect, onCancel }: { onSelect: (callerId: string) => void, onCancel: () => void }) => {
+  return (
+    <div className="absolute inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-6 animate-fade-in">
+       <h3 className="text-xl font-['Audiowide'] text-cyan-400 mb-6 tracking-widest">SELECT GAME PARTNER:</h3>
+       <div className="grid grid-cols-2 gap-4 w-full max-w-sm">
+         <button onClick={() => onSelect('doctor')} className="p-4 border border-cyan-500 bg-cyan-900/30 hover:bg-cyan-800/50 rounded flex flex-col items-center hover:scale-105 transition-all">
+             <span className="text-cyan-300 font-bold">THE DOCTOR</span>
+         </button>
+         <button onClick={() => onSelect('master_missy')} className="p-4 border border-green-500 bg-green-900/30 hover:bg-green-800/50 rounded flex flex-col items-center hover:scale-105 transition-all">
+             <span className="text-green-300 font-bold">MISSY</span>
+         </button>
+         <button onClick={() => onSelect('friend_sam')} className="p-4 border border-pink-500 bg-pink-900/30 hover:bg-pink-800/50 rounded flex flex-col items-center hover:scale-105 transition-all">
+             <span className="text-pink-300 font-bold">BESTIE</span>
+         </button>
+         <button onClick={() => onSelect('river_song')} className="p-4 border border-yellow-500 bg-yellow-900/30 hover:bg-yellow-800/50 rounded flex flex-col items-center hover:scale-105 transition-all">
+             <span className="text-yellow-300 font-bold">RIVER</span>
+         </button>
+         <button onClick={() => onSelect('ex_partner')} className="p-4 border border-purple-500 bg-purple-900/30 hover:bg-purple-800/50 rounded flex flex-col items-center hover:scale-105 transition-all col-span-2">
+             <span className="text-purple-300 font-bold">EX</span>
+         </button>
+       </div>
+       <button onClick={onCancel} className="mt-8 text-red-400 hover:text-red-200 uppercase tracking-widest text-sm hover:underline">Cancel Game</button>
+    </div>
+  );
+};
+
 const ReceivedPhotoOverlay = ({ description, onClose, caller }: { description: string, onClose: () => void, caller: CallerIdentity }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Analysis Logic for Selfies/Characters
   const text = description.toLowerCase();
   const isSelfie = text.includes('me') || text.includes('selfie') || text.includes('my face') || text.includes('wearing') || text.includes('standing') || text.includes(caller.name.toLowerCase()) || text.includes('i am');
 
-  // Character Presets for Pixel Generation
   const getCharacterPreset = (id: string): AvatarConfig => {
     switch(id) {
         case 'master_missy': 
-            return { gender: 'female', hairColor: '#000000', skinTone: '#f1c27d', shirtColor: '#8e44ad', pantsColor: '#2c3e50', hairStyle: 3 }; // Bun, Purple
+            return { gender: 'female', hairColor: '#000000', skinTone: '#f1c27d', shirtColor: '#8e44ad', pantsColor: '#2c3e50', hairStyle: 3, name: 'Missy' }; 
         case 'doctor':
         case 'eleventh_doctor':
-            return { gender: 'male', hairColor: '#8d5524', skinTone: '#ffdbac', shirtColor: '#8e44ad', pantsColor: '#2c3e50', hairStyle: 1 }; // Spiky, Bowtie colorsish
+            return { gender: 'male', hairColor: '#8d5524', skinTone: '#ffdbac', shirtColor: '#8e44ad', pantsColor: '#2c3e50', hairStyle: 1, name: 'Doctor' }; 
         case 'ex_partner':
-            return { gender: 'male', hairColor: '#f1c40f', skinTone: '#e0ac69', shirtColor: '#34495e', pantsColor: '#000000', hairStyle: 1 };
+            return { gender: 'male', hairColor: '#f1c40f', skinTone: '#e0ac69', shirtColor: '#34495e', pantsColor: '#000000', hairStyle: 1, name: 'Ex' };
         case 'friend_sam':
-            return { gender: 'female', hairColor: '#e74c3c', skinTone: '#c68642', shirtColor: '#2ecc71', pantsColor: '#ecf0f1', hairStyle: 2 }; // Long hair
+            return { gender: 'female', hairColor: '#e74c3c', skinTone: '#c68642', shirtColor: '#2ecc71', pantsColor: '#ecf0f1', hairStyle: 2, name: 'Sam' }; 
         case 'river_song':
-            return { gender: 'female', hairColor: '#e0ac69', skinTone: '#ffdbac', shirtColor: '#ecf0f1', pantsColor: '#2c3e50', hairStyle: 2 }; // Curly/Long blonde
+            return { gender: 'female', hairColor: '#e0ac69', skinTone: '#ffdbac', shirtColor: '#ecf0f1', pantsColor: '#2c3e50', hairStyle: 2, name: 'River' }; 
         default:
             return DEFAULT_AVATAR;
     }
@@ -209,7 +284,6 @@ const ReceivedPhotoOverlay = ({ description, onClose, caller }: { description: s
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Small resolution for pixel effect
     const w = 64;
     const h = 64;
     canvas.width = w;
@@ -217,19 +291,17 @@ const ReceivedPhotoOverlay = ({ description, onClose, caller }: { description: s
 
     const t = description.toLowerCase();
     
-    // 1. Draw Procedural Background
     let bgColor = "#000";
     if (t.includes('garden') || t.includes('park') || t.includes('tree')) bgColor = "#4d8061";
     else if (t.includes('space') || t.includes('nebula') || t.includes('star')) bgColor = "#1a1025";
     else if (t.includes('fire') || t.includes('danger') || t.includes('red')) bgColor = "#3a1313";
     else if (t.includes('water') || t.includes('ice') || t.includes('rain')) bgColor = "#2b506e";
     else if (t.includes('lab') || t.includes('tech') || t.includes('ship')) bgColor = "#353d42";
-    else if (isSelfie) bgColor = "#57606f"; // Portrait background
+    else if (isSelfie) bgColor = "#57606f"; 
     
     ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, w, h);
 
-    // 2. Procedural "Pixel Art" Generation (Scenery)
     const randInt = (max: number) => Math.floor(Math.random() * max);
     
     if (t.includes('space') || t.includes('star')) {
@@ -248,12 +320,10 @@ const ReceivedPhotoOverlay = ({ description, onClose, caller }: { description: s
         for(let i=0; i<40; i++) { ctx.fillRect(randInt(w), randInt(h), 1, 2); }
     }
     else if (!isSelfie) {
-        // Generic tech background if no keywords
         ctx.fillStyle = "#ffffff22";
         for(let i=0; i<h; i+=4) { ctx.fillRect(0, i, w, 1); }
     }
 
-    // Vignette
     const gradient = ctx.createRadialGradient(w/2, h/2, w/3, w/2, h/2, w);
     gradient.addColorStop(0, "transparent");
     gradient.addColorStop(1, "#00000088");
@@ -265,14 +335,11 @@ const ReceivedPhotoOverlay = ({ description, onClose, caller }: { description: s
   return (
     <div className="absolute inset-0 z-40 bg-black/80 flex flex-col items-center justify-center p-6 animate-fade-in">
         <div className="w-full max-w-sm aspect-square border-4 border-cyan-500 bg-gray-900 relative overflow-hidden shadow-[0_0_50px_rgba(34,211,238,0.3)]">
-            {/* Background Canvas */}
             <canvas 
                 ref={canvasRef} 
                 className="w-full h-full absolute inset-0"
                 style={{ imageRendering: 'pixelated' }}
             />
-            
-            {/* Character Overlay (If Selfie) */}
             {characterConfig && (
                 <div className="absolute inset-0 flex items-center justify-center z-10 top-4">
                     <PixelAvatar config={characterConfig} scale={8} animate={true} />
@@ -298,12 +365,17 @@ const App: React.FC = () => {
   const [permissionError, setPermissionError] = useState<boolean>(false);
   
   const [showRecipientModal, setShowRecipientModal] = useState(false);
+  const [showGameSelector, setShowGameSelector] = useState(false);
+  const [isGameActive, setIsGameActive] = useState(false);
+  
   const [pendingPhoto, setPendingPhoto] = useState<string | null>(null);
   const [receivedPhotoData, setReceivedPhotoData] = useState<{description: string} | null>(null);
 
-  // Avatar State
   const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(DEFAULT_AVATAR);
   const [showAvatarEditor, setShowAvatarEditor] = useState(false);
+
+  const [customContacts, setCustomContacts] = useState<{ [key: string]: { name: string, persona: string } }>({});
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputAudioContextRef = useRef<AudioContext | null>(null);
@@ -323,22 +395,33 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const newScores: { [key: string]: number } = {};
-    ['ex_partner', 'friend_sam', 'master_missy'].forEach(id => {
+    ['ex_partner', 'friend_sam', 'master_missy', 'river_song'].forEach(id => {
        const s = parseInt(localStorage.getItem(`relationship_score_${id}`) || '1');
        newScores[id] = s;
     });
     setScores(newScores);
     
-    // Load Avatar
     const savedAvatar = localStorage.getItem('user_avatar');
     if (savedAvatar) {
         try { setAvatarConfig(JSON.parse(savedAvatar)); } catch(e) {}
+    }
+
+    const savedContacts = localStorage.getItem('custom_contacts');
+    if (savedContacts) {
+      try { setCustomContacts(JSON.parse(savedContacts)); } catch(e) {}
     }
   }, []);
 
   const saveAvatar = (config: AvatarConfig) => {
       setAvatarConfig(config);
       localStorage.setItem('user_avatar', JSON.stringify(config));
+  };
+
+  const handleSaveContact = (id: string, name: string, persona: string) => {
+    const updated = { ...customContacts, [id]: { name, persona } };
+    setCustomContacts(updated);
+    localStorage.setItem('custom_contacts', JSON.stringify(updated));
+    setEditingContactId(null);
   };
 
   useEffect(() => {
@@ -380,7 +463,6 @@ const App: React.FC = () => {
 
   const prepareRandomCaller = useCallback(() => {
       const rand = Math.random();
-      // 40% Chance Missy or Legacy Character
       if (rand > 0.60) {
          const specialCallers = POTENTIAL_CALLERS.filter(c => c.type === 'VILLAIN' || c.type === 'LEGACY');
          const selected = specialCallers[Math.floor(Math.random() * specialCallers.length)];
@@ -389,33 +471,39 @@ const App: React.FC = () => {
              setCaller({ ...selected, currentScenario: randomScenario });
          }
       } 
-      // 20% Chance Doctor
       else if (rand > 0.40) {
          const randomAdventure = DOCTOR_ADVENTURES[Math.floor(Math.random() * DOCTOR_ADVENTURES.length)];
          setCaller({ ...POTENTIAL_CALLERS[0], adventure: randomAdventure });
       }
-      // 20% Chance Earth Caller
       else if (rand > 0.20) {
          const earthCallers = POTENTIAL_CALLERS.filter(c => c.type === 'EARTH');
          const selected = earthCallers[Math.floor(Math.random() * earthCallers.length)];
+         
+         let activeCaller = { ...selected };
+         const customData = customContacts[selected.id];
+         if (customData) {
+            activeCaller.name = customData.name;
+            activeCaller.customPersona = customData.persona;
+         }
+
          const isWeird = Math.random() > 0.6;
          let adventure = undefined;
          let currentScenario = undefined;
          if (isWeird) {
              adventure = EARTH_WEIRD_EVENTS[Math.floor(Math.random() * EARTH_WEIRD_EVENTS.length)];
-         } else if (selected.scenarios && selected.scenarios.length > 0) {
-             currentScenario = selected.scenarios[Math.floor(Math.random() * selected.scenarios.length)];
+         } else if (activeCaller.scenarios && activeCaller.scenarios.length > 0) {
+             currentScenario = activeCaller.scenarios[Math.floor(Math.random() * activeCaller.scenarios.length)];
          }
-         setCaller({ ...selected, adventure: adventure, currentScenario: currentScenario });
+         
+         setCaller({ ...activeCaller, adventure: adventure, currentScenario: currentScenario });
       } 
-      // 20% Chance VIP
       else {
          const vip = VIP_CALLERS[Math.floor(Math.random() * VIP_CALLERS.length)];
          const scenarios = VIP_SCENARIOS[vip.id as keyof typeof VIP_SCENARIOS];
          const randomScenario = scenarios ? scenarios[Math.floor(Math.random() * scenarios.length)] : "Unknown crisis.";
          setCaller({ ...vip, currentScenario: randomScenario });
       }
-  }, []);
+  }, [customContacts]);
 
   useEffect(() => {
     if (appState === AppState.IDLE) {
@@ -454,21 +542,35 @@ const App: React.FC = () => {
   }, [saveMemory]);
 
   const handleEndCall = useCallback(() => {
-    console.log(`Call ending. Duration: ${Date.now() - startTimeRef.current}ms`);
+    // Check if the call was incredibly short (likely a connection drop/glitch)
+    // If so, we log it but proceed to reset. To be safer, we could auto-retry or just warn.
+    const duration = Date.now() - startTimeRef.current;
+    if (duration < 1000) {
+       console.warn("Call ended too quickly (likely connection drop). Resetting UI.");
+    }
+
+    console.log(`Call ending. Duration: ${duration}ms`);
     stopAudio();
     setAppState(AppState.IDLE);
     setPendingPhoto(null);
     setReceivedPhotoData(null);
+    setIsGameActive(false); 
     setTimeout(() => { setCaller(POTENTIAL_CALLERS[0]); }, 1000); 
   }, [stopAudio]);
 
-  const startConversation = async (specificCaller?: CallerIdentity) => {
+  const startConversation = async (specificCaller?: CallerIdentity, isGameMode: boolean = false) => {
     try {
       setAppState(AppState.CONNECTING);
       setPermissionError(false);
       startTimeRef.current = Date.now();
       
-      const activeCaller = specificCaller || caller;
+      let activeCaller = specificCaller || caller;
+      
+      const customData = customContacts[activeCaller.id];
+      if (customData) {
+        activeCaller = { ...activeCaller, name: customData.name, customPersona: customData.persona };
+      }
+
       setCaller(activeCaller);
       currentCallerIdRef.current = activeCaller.id; 
 
@@ -506,9 +608,8 @@ const App: React.FC = () => {
       scriptProcessorRef.current = scriptProcessor;
       
       const { memory, score } = loadMemory(activeCaller.id);
-      // Get User Name from Avatar Config
       const userName = avatarConfig.name || "Traveler";
-      const systemInstructionText = getSystemInstruction(activeCaller, memory, score, userName);
+      const systemInstructionText = getSystemInstruction(activeCaller, memory, score, userName, isGameMode);
 
       const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
@@ -516,24 +617,23 @@ const App: React.FC = () => {
           onopen: () => {
             console.log("Connection Established");
             setAppState(AppState.CONNECTED);
+            if (isGameMode) setIsGameActive(true);
 
-            // 1. Send Image if available
             if (activeCaller.initialImage) {
                  sessionPromise.then(session => session.sendRealtimeInput({ media: { mimeType: "image/jpeg", data: activeCaller.initialImage } }));
                  setPendingPhoto(null);
             }
 
-            // 2. STABILITY FIX: Send Silence Header + TEXT TRIGGER
             setTimeout(() => {
                sessionPromise.then(session => {
-                   // A. Send Silence
+                   // A. Send Silence to wake up VAD
                    const silence = new Float32Array(16000);
                    session.sendRealtimeInput({ media: createBlob(silence) });
 
-                   // B. Send Text Trigger
+                   // B. Send Text Trigger to force model turn
                    session.sendRealtimeInput({
                        clientContent: {
-                           turns: [{ role: 'user', parts: [{ text: "The user has picked up the phone. Speak immediately." }] }],
+                           turns: [{ role: 'user', parts: [{ text: isGameMode ? "The user is starting the game NOW. Start commentating!" : "The user has picked up the phone. Speak immediately." }] }],
                            turnComplete: true
                        }
                    });
@@ -587,16 +687,15 @@ const App: React.FC = () => {
           },
           onerror: (err) => {
              console.error("Connection Error", err);
-             // Do not immediately kill app state on minor errors if possible
           }
         },
         config: {
           tools: [{ functionDeclarations: [SEND_PHOTO_TOOL] }],
-          responseModalities: [Modality.AUDIO], 
+          responseModalities: ['AUDIO'], 
           inputAudioTranscription: {}, 
           outputAudioTranscription: {}, 
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: activeCaller.voiceName || 'Puck' } } },
-          // PLAIN STRING SYSTEM INSTRUCTION FOR ROBUSTNESS
+          // Unwrapped system instruction for better stability
           systemInstruction: systemInstructionText,
         }
       });
@@ -630,6 +729,35 @@ const App: React.FC = () => {
       startConversation(activeCaller);
   };
 
+  const handleGamePartnerSelect = (callerId: string) => {
+      setShowGameSelector(false);
+      let selectedCaller = POTENTIAL_CALLERS.find(c => c.id === callerId) || POTENTIAL_CALLERS[0];
+      startConversation(selectedCaller, true); 
+  };
+
+  const handleGameEvent = (eventText: string) => {
+      if (sessionRef.current) {
+          sessionRef.current.sendRealtimeInput({
+              clientContent: {
+                  turns: [{ role: 'user', parts: [{ text: `[GAME EVENT]: ${eventText}` }] }],
+                  turnComplete: true
+              }
+          });
+      }
+
+      if (eventText.includes("leveled up")) {
+          const id = currentCallerIdRef.current;
+          if (['ex_partner', 'friend_sam', 'master_missy', 'river_song'].includes(id)) {
+             const currentScore = scores[id] || 1;
+             if (currentScore < MAX_RELATIONSHIP_SCORE) {
+                 const newScore = currentScore + 1;
+                 setScores(prev => ({ ...prev, [id]: newScore }));
+                 localStorage.setItem(`relationship_score_${id}`, newScore.toString());
+             }
+          }
+      }
+  };
+
   const handleManualCall = () => {
     const doctor = POTENTIAL_CALLERS[0];
     const activeDoctor = { ...doctor, adventure: DOCTOR_ADVENTURES[Math.floor(Math.random() * DOCTOR_ADVENTURES.length)] };
@@ -638,11 +766,19 @@ const App: React.FC = () => {
 
   const handleCallEx = () => {
     const ex = POTENTIAL_CALLERS.find(c => c.id === 'ex_partner');
-    if (ex && ex.scenarios) startConversation({ ...ex, currentScenario: ex.scenarios[Math.floor(Math.random() * ex.scenarios.length)] });
+    if (ex) {
+        let caller = { ...ex };
+        if (ex.scenarios) caller.currentScenario = ex.scenarios[Math.floor(Math.random() * ex.scenarios.length)];
+        startConversation(caller);
+    }
   };
   const handleCallFriend = () => {
     const friend = POTENTIAL_CALLERS.find(c => c.id === 'friend_sam');
-    if (friend && friend.scenarios) startConversation({ ...friend, currentScenario: friend.scenarios[Math.floor(Math.random() * friend.scenarios.length)] });
+    if (friend) {
+        let caller = { ...friend };
+        if (friend.scenarios) caller.currentScenario = friend.scenarios[Math.floor(Math.random() * friend.scenarios.length)];
+        startConversation(caller);
+    }
   };
   const handleCallMaster = () => {
     const master = POTENTIAL_CALLERS.find(c => c.id === 'master_missy');
@@ -667,6 +803,24 @@ const App: React.FC = () => {
         />
       )}
 
+      {showGameSelector && <GamePartnerSelector onSelect={handleGamePartnerSelect} onCancel={() => setShowGameSelector(false)} />}
+      {isGameActive && (
+          <FishGame 
+             onGameEvent={handleGameEvent} 
+             onClose={() => { setIsGameActive(false); handleEndCall(); }}
+          />
+      )}
+
+      {editingContactId && (
+        <ContactEditor 
+          id={editingContactId}
+          initialName={customContacts[editingContactId]?.name || POTENTIAL_CALLERS.find(c => c.id === editingContactId)?.name || ""}
+          initialPersona={customContacts[editingContactId]?.persona || ""}
+          onSave={handleSaveContact}
+          onClose={() => setEditingContactId(null)}
+        />
+      )}
+
       {showRecipientModal && ( <RecipientSelector onSelect={handlePhotoRecipientSelect} onCancel={() => { setShowRecipientModal(false); setPendingPhoto(null); }} /> )}
       {receivedPhotoData && ( <ReceivedPhotoOverlay description={receivedPhotoData.description} onClose={() => setReceivedPhotoData(null)} caller={caller} /> )}
       
@@ -686,14 +840,12 @@ const App: React.FC = () => {
            {isGlitching && ( <p className="text-red-500 font-bold animate-pulse text-xs bg-black/80 inline-block px-2">⚠ SIGNAL UNSTABLE ⚠</p> )}
         </div>
         
-        {/* Main Visualizer Area */}
         <div className="relative w-80 h-80 flex items-center justify-center group/rotor">
            <div className={`absolute w-full h-full border-4 border-cyan-900/30 rounded-full animate-[spin_10s_linear_infinite] ${isGlitching ? 'border-red-900/50' : ''} group-hover/rotor:border-cyan-500/40 group-hover/rotor:shadow-[0_0_40px_rgba(34,211,238,0.2)] transition-all duration-500`}></div>
            <div className="absolute w-3/4 h-3/4 border-2 border-dashed border-cyan-500/20 rounded-full animate-[spin_15s_linear_infinite_reverse] group-hover/rotor:border-cyan-400/40 transition-all duration-500"></div>
            
            <ParticleVisualizer analyser={analyserRef.current} isActive={appState === AppState.CONNECTED} isGlitching={isGlitching} />
            
-           {/* Center Avatar when IDLE */}
            {appState === AppState.IDLE && (
                <div className="absolute z-15 animate-pulse cursor-pointer transition-transform hover:scale-110" onClick={() => setShowAvatarEditor(true)} title="Edit Hologram Identity">
                    <div className="relative flex flex-col items-center">
@@ -723,7 +875,6 @@ const App: React.FC = () => {
            </div>
         </div>
 
-        {/* Control Panel */}
         <div className="w-full max-w-md p-6 border border-cyan-900/50 bg-black/40 backdrop-blur-sm rounded-xl">
            <div className="flex justify-center items-center gap-6">
               {appState === AppState.IDLE && (
@@ -735,7 +886,14 @@ const App: React.FC = () => {
                       </button>
                     </div>
                     
-                    <div className="flex flex-col items-center justify-end h-full">
+                    <div className="flex flex-col items-center justify-end h-full gap-4">
+                      {/* GAME BUTTON */}
+                      <button onClick={() => setShowGameSelector(true)} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-110 duration-300" aria-label="Play Game">
+                        <div className="w-16 h-16 rounded-full bg-green-900 border-4 border-green-400 flex items-center justify-center shadow-[0_0_20px_rgba(74,222,128,0.3)] group-hover:shadow-[0_0_50px_rgba(74,222,128,0.8)] group-hover:border-green-200 group-hover:bg-green-800 transition-all duration-300"><GamepadIcon /></div>
+                        <span className="text-green-400 font-bold tracking-widest text-[10px] group-hover:text-green-100 group-hover:drop-shadow-[0_0_5px_rgba(74,222,128,0.8)]">GAME</span>
+                      </button>
+
+                      {/* SEND IMG BUTTON */}
                       <button onClick={() => fileInputRef.current?.click()} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-110 duration-300" aria-label="Send Photo">
                         <div className="w-16 h-16 rounded-full bg-blue-900 border-4 border-blue-400 flex items-center justify-center shadow-[0_0_20px_rgba(96,165,250,0.3)] group-hover:shadow-[0_0_50px_rgba(96,165,250,0.8)] group-hover:border-blue-200 group-hover:bg-blue-800 transition-all duration-300"><CameraIcon /></div>
                         <span className="text-blue-400 font-bold tracking-widest text-[10px] group-hover:text-blue-100 group-hover:drop-shadow-[0_0_5px_rgba(96,165,250,0.8)]">SEND IMG</span>
@@ -743,24 +901,37 @@ const App: React.FC = () => {
                     </div>
                     
                     <div className="flex flex-col items-center justify-end h-full">
-                      {/* RIVER SONG BUTTON */}
                       <button onClick={handleCallRiver} className="group relative flex flex-col items-center gap-1 transition-all hover:scale-110 duration-300 mb-2" aria-label="Call River Song">
                         <div className="w-12 h-12 rounded-full bg-yellow-900 border-4 border-yellow-400 flex items-center justify-center shadow-[0_0_20px_rgba(250,204,21,0.3)] group-hover:shadow-[0_0_50px_rgba(250,204,21,0.8)] group-hover:border-yellow-200 group-hover:bg-yellow-800 transition-all duration-300"><BookIcon /></div>
                         <span className="text-yellow-400 font-bold tracking-widest text-[8px] group-hover:text-yellow-100">RIVER</span>
                       </button>
 
                       <AffectionMeter score={scores['friend_sam'] || 1} color="bg-pink-500" />
-                      <button onClick={handleCallFriend} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-110 duration-300" aria-label="Call Bestie">
+                      <LongPressButton 
+                        onClick={handleCallFriend} 
+                        onLongPress={() => setEditingContactId('friend_sam')}
+                        className="group relative flex flex-col items-center gap-2 transition-all hover:scale-110 duration-300" 
+                        aria-label="Call Bestie"
+                      >
                         <div className="w-16 h-16 rounded-full bg-pink-900 border-4 border-pink-400 flex items-center justify-center shadow-[0_0_20px_rgba(244,114,182,0.3)] group-hover:shadow-[0_0_50px_rgba(244,114,182,0.8)] group-hover:border-pink-200 group-hover:bg-pink-800 transition-all duration-300"><StarIcon /></div>
-                        <span className="text-pink-400 font-bold tracking-widest text-[10px] group-hover:text-pink-100 group-hover:drop-shadow-[0_0_5px_rgba(244,114,182,0.8)]">BESTIE</span>
-                      </button>
+                        <span className="text-pink-400 font-bold tracking-widest text-[10px] group-hover:text-pink-100 group-hover:drop-shadow-[0_0_5px_rgba(244,114,182,0.8)]">
+                           {customContacts['friend_sam']?.name || 'BESTIE'}
+                        </span>
+                      </LongPressButton>
                     </div>
                     <div className="flex flex-col items-center justify-end h-full">
                       <AffectionMeter score={scores['ex_partner'] || 1} color="bg-purple-500" />
-                      <button onClick={handleCallEx} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-110 duration-300" aria-label="Call Ex">
+                      <LongPressButton 
+                        onClick={handleCallEx} 
+                        onLongPress={() => setEditingContactId('ex_partner')}
+                        className="group relative flex flex-col items-center gap-2 transition-all hover:scale-110 duration-300" 
+                        aria-label="Call Ex"
+                      >
                         <div className="w-16 h-16 rounded-full bg-purple-900 border-4 border-purple-400 flex items-center justify-center shadow-[0_0_20px_rgba(192,132,252,0.3)] group-hover:shadow-[0_0_50px_rgba(192,132,252,0.8)] group-hover:border-purple-200 group-hover:bg-purple-800 transition-all duration-300"><BrokenHeartIcon /></div>
-                        <span className="text-purple-400 font-bold tracking-widest text-[10px] group-hover:text-purple-100 group-hover:drop-shadow-[0_0_5px_rgba(192,132,252,0.8)]">EX</span>
-                      </button>
+                        <span className="text-purple-400 font-bold tracking-widest text-[10px] group-hover:text-purple-100 group-hover:drop-shadow-[0_0_5px_rgba(192,132,252,0.8)]">
+                           {customContacts['ex_partner']?.name || 'EX'}
+                        </span>
+                      </LongPressButton>
                     </div>
                     <div className="flex flex-col items-center justify-end h-full">
                       <AffectionMeter score={scores['master_missy'] || 1} color="bg-green-500" />
@@ -793,6 +964,7 @@ const App: React.FC = () => {
            <div className="mt-6 border-t border-cyan-900/50 pt-4">
               <div className="flex justify-between text-xs text-cyan-600 font-mono">
                 <span>FREQ: {isGlitching ? 'DRIFTING...' : (appState === AppState.CONNECTED ? 'LOCKED' : 'SCANNING')}</span>
+                <span className="text-[10px] text-gray-500">HOLD BTN TO EDIT CONTACTS</span>
               </div>
            </div>
         </div>
