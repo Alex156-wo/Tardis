@@ -8,6 +8,7 @@ export interface AvatarConfig {
   shirtColor: string;
   pantsColor: string;
   hairStyle: number;
+  name?: string; // New field for user name
 }
 
 interface PixelAvatarProps {
@@ -22,7 +23,8 @@ export const DEFAULT_AVATAR: AvatarConfig = {
   hairColor: '#e74c3c',
   shirtColor: '#3498db',
   pantsColor: '#2c3e50',
-  hairStyle: 0
+  hairStyle: 0,
+  name: 'Traveler'
 };
 
 export const PixelAvatar: React.FC<PixelAvatarProps> = ({ config, scale = 4, animate = false }) => {
@@ -152,8 +154,21 @@ export const AvatarEditor: React.FC<AvatarEditorProps> = ({ config, onChange, on
                 <h2 className="text-2xl font-['Audiowide'] text-cyan-400 mb-6 text-center tracking-widest">IDENTITY MATRIX</h2>
                 
                 <div className="flex flex-col md:flex-row gap-8 items-center justify-center mb-6">
-                    <div className="p-4 bg-cyan-900/30 rounded-lg border border-cyan-700">
-                        <PixelAvatar config={config} scale={8} animate={true} />
+                    <div className="flex flex-col items-center gap-4">
+                        <div className="p-4 bg-cyan-900/30 rounded-lg border border-cyan-700">
+                            <PixelAvatar config={config} scale={8} animate={true} />
+                        </div>
+                        {/* NAME INPUT */}
+                        <div className="w-full">
+                            <label className="text-[10px] text-cyan-500 font-mono tracking-wider block mb-1">DESIGNATION (NAME)</label>
+                            <input 
+                                type="text" 
+                                value={config.name || ''} 
+                                onChange={(e) => update('name', e.target.value)}
+                                placeholder="Enter Name..."
+                                className="w-full bg-black/50 border border-cyan-700 rounded px-2 py-1 text-cyan-300 font-mono text-sm focus:border-cyan-400 outline-none uppercase"
+                            />
+                        </div>
                     </div>
                     
                     <div className="space-y-4 w-full">

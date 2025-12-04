@@ -1,6 +1,6 @@
 
 import { CallerIdentity } from "./types";
-import { FunctionDeclaration, Type } from "@google/genai";
+import { FunctionDeclaration } from "@google/genai";
 
 export const DOCTOR_VOICE_NAME = 'Puck'; 
 export const TARDIS_BLUE = '#003b6f';
@@ -10,15 +10,15 @@ export const PARTICLE_GOLD = 'rgba(255, 215, 0, 0.8)';
 export const PARTICLE_BLUE = 'rgba(0, 191, 255, 0.8)';
 export const MAX_RELATIONSHIP_SCORE = 10;
 
-// Use SDK Type enum for strict schema validation
+// Use String literals for strict JSON schema validation to prevent Network Errors
 export const SEND_PHOTO_TOOL: FunctionDeclaration = {
   name: "sendPhoto",
   description: "Send a visual image/photo of your current surroundings or an object to the user.",
   parameters: {
-    type: Type.OBJECT,
+    type: "OBJECT",
     properties: {
       description: {
-        type: Type.STRING,
+        type: "STRING",
         description: "A short text description of what is in the photo you are sending."
       }
     },
@@ -117,13 +117,13 @@ export const POTENTIAL_CALLERS: CallerIdentity[] = [
     type: 'LEGACY', 
     voiceName: 'Kore', 
     scenarios: [
-      "Hello Sweetie. I'm breaking into the Stormcage Containment Facility and I need you to create a diversion.",
-      "I found a diary entry I don't remember writing. It mentions you. Spoilers!",
-      "I'm at a party at the end of the universe. The champagne is excellent, but the host is a Zygon.",
-      "I need the Doctor. I've accidentally married a robot king and the honeymoon is dragging on.",
-      "I'm currently falling out of a spaceship airlock. Don't worry, I have a plan. It involves lipstick.",
-      "I found a vortex manipulator at a pawn shop. Should I buy it?",
-      "I'm investigating a crash site. The ship looks like a giant shoe. It's very stylish."
+      "Hello Sweetie. I'm breaking into the Stormcage Containment Facility and I need you to create a diversion. How's your day going?",
+      "I found a diary entry I don't remember writing. It mentions you saving my life next Tuesday. Spoilers!",
+      "I'm at a party at the end of the universe. The champagne is excellent, but the host is a Zygon. Wish you were here.",
+      "I need a friend. The Doctor is being impossible again. He forgot our anniversary (again).",
+      "I'm currently falling out of a spaceship airlock. Don't worry, I have a plan. It involves lipstick. But tell me, have you seen any good movies lately?",
+      "I found a vortex manipulator at a pawn shop. I'm thinking of visiting you for lunch. 1920s or 3050s?",
+      "I'm investigating a crash site. The ship looks like a giant shoe. It's very stylish. You'd love it."
     ]
   },
   {
@@ -330,7 +330,7 @@ const getRelationshipContext = (caller: CallerIdentity, score: number): string =
   }
 
   if (caller.id === 'river_song') {
-    return "Relationship: Complex. You are the user's wife/husband from the future/past. You know everything about them, but they know little about you. Flirty and secretive.";
+    return "Relationship: BEST FRIEND & CONFIDANT. You trust the user implicitly. You share secrets, gossip about the Doctor, and treat the user as your partner in crime. You are flirty, mysterious, but genuinely warm and loving towards the user.";
   }
 
   if (caller.id === 'captain_jack') {
@@ -348,15 +348,16 @@ const getRelationshipContext = (caller: CallerIdentity, score: number): string =
   return "Relationship: Neutral.";
 };
 
-export const getSystemInstruction = (caller: CallerIdentity, previousContext: string, relationshipScore: number): string => {
+export const getSystemInstruction = (caller: CallerIdentity, previousContext: string, relationshipScore: number, userName: string = "Traveler"): string => {
   const relationshipContext = getRelationshipContext(caller, relationshipScore);
   
   const baseInstruction = `
     You are participating in a voice call simulation.
     Your identity is: ${caller.name}.
+    The user's name is: "${userName}". ADDRESS THEM BY NAME OCCASIONALLY.
     
     CRITICAL CONVERSATION RULES:
-    1. **SPEAK FIRST IMMEDIATELY**: As soon as the connection opens, YOU must start talking based on your scenario. Do not say "Hello user" robotically. Start *in media res* (e.g., "Don't panic, but I think the toaster is plotting against me.").
+    1. **SPEAK FIRST IMMEDIATELY**: As soon as the connection opens, YOU must start talking based on your scenario. Do not say "Hello ${userName}" robotically. Start *in media res* (e.g., "Don't panic, but I think the toaster is plotting against me.").
     2. **NATURAL SPEECH**: Use fillers (um, uh), interruptions, laughter, and tone shifts. Mimic a REAL human (or Time Lord) conversation. Do NOT sound like an AI assistant.
     3. **NO REPETITION**: Stick strictly to the specific SCENARIO provided below. Do not revert to generic greetings.
     4. **KEEP RESPONSES SHORT**: Max 1-3 sentences. Rapid fire.
@@ -418,6 +419,7 @@ export const getSystemInstruction = (caller: CallerIdentity, previousContext: st
        PERSONA: ${caller.name}.
        SCENARIO: ${caller.currentScenario}
        Directives: Capture the specific personality traits of the character (e.g., River's mystery, Donna's shouting).
+       ${caller.id === 'river_song' ? 'Special Directive: Be incredibly flirty, use phrases like "Hello Sweetie" and "Spoilers". Treat the user as your closest confidant.' : ''}
     `;
   } else if (caller.type === 'VIP') {
      return `

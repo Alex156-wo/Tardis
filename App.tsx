@@ -50,6 +50,9 @@ const DownloadIcon = () => (
 const UserIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
 );
+const BookIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+);
 
 const GhostTardis = () => {
   const [isMaterializing, setIsMaterializing] = useState(false);
@@ -151,62 +154,138 @@ const RecipientSelector = ({ onSelect, onCancel }: { onSelect: (callerId: string
     <div className="absolute inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-6 animate-fade-in">
        <h3 className="text-xl font-['Audiowide'] text-cyan-400 mb-6 tracking-widest">TRANSMIT IMAGE TO:</h3>
        <div className="grid grid-cols-2 gap-4 w-full max-w-sm">
-         <button onClick={() => onSelect('doctor')} className="p-4 border border-cyan-500 bg-cyan-900/30 hover:bg-cyan-800/50 rounded flex flex-col items-center">
+         <button onClick={() => onSelect('doctor')} className="p-4 border border-cyan-500 bg-cyan-900/30 hover:bg-cyan-800/50 rounded flex flex-col items-center hover:scale-105 transition-all">
              <span className="text-cyan-300 font-bold">THE DOCTOR</span>
          </button>
-         <button onClick={() => onSelect('master_missy')} className="p-4 border border-green-500 bg-green-900/30 hover:bg-green-800/50 rounded flex flex-col items-center">
+         <button onClick={() => onSelect('master_missy')} className="p-4 border border-green-500 bg-green-900/30 hover:bg-green-800/50 rounded flex flex-col items-center hover:scale-105 transition-all">
              <span className="text-green-300 font-bold">MISSY</span>
          </button>
-         <button onClick={() => onSelect('ex_partner')} className="p-4 border border-purple-500 bg-purple-900/30 hover:bg-purple-800/50 rounded flex flex-col items-center">
+         <button onClick={() => onSelect('ex_partner')} className="p-4 border border-purple-500 bg-purple-900/30 hover:bg-purple-800/50 rounded flex flex-col items-center hover:scale-105 transition-all">
              <span className="text-purple-300 font-bold">EX (JORDAN)</span>
          </button>
-         <button onClick={() => onSelect('friend_sam')} className="p-4 border border-pink-500 bg-pink-900/30 hover:bg-pink-800/50 rounded flex flex-col items-center">
+         <button onClick={() => onSelect('friend_sam')} className="p-4 border border-pink-500 bg-pink-900/30 hover:bg-pink-800/50 rounded flex flex-col items-center hover:scale-105 transition-all">
              <span className="text-pink-300 font-bold">BESTIE (SAM)</span>
          </button>
+         <button onClick={() => onSelect('river_song')} className="p-4 border border-yellow-500 bg-yellow-900/30 hover:bg-yellow-800/50 rounded flex flex-col items-center hover:scale-105 transition-all col-span-2">
+             <span className="text-yellow-300 font-bold">RIVER SONG</span>
+         </button>
        </div>
-       <button onClick={onCancel} className="mt-8 text-red-400 hover:text-red-200 uppercase tracking-widest text-sm">Cancel Transmission</button>
+       <button onClick={onCancel} className="mt-8 text-red-400 hover:text-red-200 uppercase tracking-widest text-sm hover:underline">Cancel Transmission</button>
     </div>
   );
 };
 
-const ReceivedPhotoOverlay = ({ description, onClose }: { description: string, onClose: () => void }) => {
-  const generatePsychicVisual = (text: string) => {
-    const t = text.toLowerCase();
-    if (t.includes('space') || t.includes('star') || t.includes('nebula') || t.includes('galaxy') || t.includes('black hole') || t.includes('planet')) {
-      return "radial-gradient(circle at 50% 50%, #2b1055 0%, #7597de 25%, #2b1055 50%, #000000 100%)"; 
+const ReceivedPhotoOverlay = ({ description, onClose, caller }: { description: string, onClose: () => void, caller: CallerIdentity }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Analysis Logic for Selfies/Characters
+  const text = description.toLowerCase();
+  const isSelfie = text.includes('me') || text.includes('selfie') || text.includes('my face') || text.includes('wearing') || text.includes('standing') || text.includes(caller.name.toLowerCase()) || text.includes('i am');
+
+  // Character Presets for Pixel Generation
+  const getCharacterPreset = (id: string): AvatarConfig => {
+    switch(id) {
+        case 'master_missy': 
+            return { gender: 'female', hairColor: '#000000', skinTone: '#f1c27d', shirtColor: '#8e44ad', pantsColor: '#2c3e50', hairStyle: 3 }; // Bun, Purple
+        case 'doctor':
+        case 'eleventh_doctor':
+            return { gender: 'male', hairColor: '#8d5524', skinTone: '#ffdbac', shirtColor: '#8e44ad', pantsColor: '#2c3e50', hairStyle: 1 }; // Spiky, Bowtie colorsish
+        case 'ex_partner':
+            return { gender: 'male', hairColor: '#f1c40f', skinTone: '#e0ac69', shirtColor: '#34495e', pantsColor: '#000000', hairStyle: 1 };
+        case 'friend_sam':
+            return { gender: 'female', hairColor: '#e74c3c', skinTone: '#c68642', shirtColor: '#2ecc71', pantsColor: '#ecf0f1', hairStyle: 2 }; // Long hair
+        case 'river_song':
+            return { gender: 'female', hairColor: '#e0ac69', skinTone: '#ffdbac', shirtColor: '#ecf0f1', pantsColor: '#2c3e50', hairStyle: 2 }; // Curly/Long blonde
+        default:
+            return DEFAULT_AVATAR;
     }
-    if (t.includes('fire') || t.includes('burn') || t.includes('explosion') || t.includes('danger') || t.includes('dalek') || t.includes('red')) {
-      return "conic-gradient(from 180deg at 50% 50%, #ff0000 0deg, #ff8c00 60deg, #370617 120deg, #ff0000 360deg)";
-    }
-    if (t.includes('garden') || t.includes('tree') || t.includes('flower') || t.includes('park') || t.includes('green') || t.includes('grass')) {
-      return "linear-gradient(135deg, #134e5e 0%, #71b280 100%)";
-    }
-    if (t.includes('robot') || t.includes('cyberman') || t.includes('metal') || t.includes('tech') || t.includes('ship')) {
-      return "repeating-linear-gradient(45deg, #606dbc, #606dbc 10px, #465298 10px, #465298 20px)";
-    }
-    if (t.includes('water') || t.includes('ice') || t.includes('rain') || t.includes('blue') || t.includes('glass')) {
-      return "linear-gradient(to top, #accbee 0%, #e7f0fd 100%)";
-    }
-    return "repeating-radial-gradient(circle at 0 0, transparent 0, #000 10px), repeating-linear-gradient(#003b6f55, #003b6f)";
   };
 
-  const bgStyle = generatePsychicVisual(description);
+  const characterConfig = isSelfie ? getCharacterPreset(caller.id) : null;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Small resolution for pixel effect
+    const w = 64;
+    const h = 64;
+    canvas.width = w;
+    canvas.height = h;
+
+    const t = description.toLowerCase();
+    
+    // 1. Draw Procedural Background
+    let bgColor = "#000";
+    if (t.includes('garden') || t.includes('park') || t.includes('tree')) bgColor = "#4d8061";
+    else if (t.includes('space') || t.includes('nebula') || t.includes('star')) bgColor = "#1a1025";
+    else if (t.includes('fire') || t.includes('danger') || t.includes('red')) bgColor = "#3a1313";
+    else if (t.includes('water') || t.includes('ice') || t.includes('rain')) bgColor = "#2b506e";
+    else if (t.includes('lab') || t.includes('tech') || t.includes('ship')) bgColor = "#353d42";
+    else if (isSelfie) bgColor = "#57606f"; // Portrait background
+    
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, w, h);
+
+    // 2. Procedural "Pixel Art" Generation (Scenery)
+    const randInt = (max: number) => Math.floor(Math.random() * max);
+    
+    if (t.includes('space') || t.includes('star')) {
+        for(let i=0; i<30; i++) {
+            ctx.fillStyle = Math.random() > 0.8 ? "#fff" : "#ffffff44";
+            ctx.fillRect(randInt(w), randInt(h), 1, 1);
+        }
+        ctx.fillStyle = "#a29bfe";
+        const px = randInt(w-10), py = randInt(h-10);
+        ctx.fillRect(px, py, 12, 12);
+        ctx.fillStyle = "#8076eb";
+        ctx.fillRect(px, py+8, 12, 4);
+    } 
+    else if (t.includes('garden') || t.includes('grass')) {
+        ctx.fillStyle = "#2e5a3e";
+        for(let i=0; i<40; i++) { ctx.fillRect(randInt(w), randInt(h), 1, 2); }
+    }
+    else if (!isSelfie) {
+        // Generic tech background if no keywords
+        ctx.fillStyle = "#ffffff22";
+        for(let i=0; i<h; i+=4) { ctx.fillRect(0, i, w, 1); }
+    }
+
+    // Vignette
+    const gradient = ctx.createRadialGradient(w/2, h/2, w/3, w/2, h/2, w);
+    gradient.addColorStop(0, "transparent");
+    gradient.addColorStop(1, "#00000088");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+
+  }, [description, isSelfie]);
 
   return (
     <div className="absolute inset-0 z-40 bg-black/80 flex flex-col items-center justify-center p-6 animate-fade-in">
         <div className="w-full max-w-sm aspect-square border-4 border-cyan-500 bg-gray-900 relative overflow-hidden shadow-[0_0_50px_rgba(34,211,238,0.3)]">
-            <div className="absolute inset-0 opacity-80" style={{ background: bgStyle }}></div>
-            <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'linear-gradient(rgba(0, 255, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 255, 0.1) 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
-            <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-4 border-t border-cyan-500">
-               <p className="text-[10px] text-cyan-500 font-mono uppercase mb-1">VISUAL DATA DECODED:</p>
+            {/* Background Canvas */}
+            <canvas 
+                ref={canvasRef} 
+                className="w-full h-full absolute inset-0"
+                style={{ imageRendering: 'pixelated' }}
+            />
+            
+            {/* Character Overlay (If Selfie) */}
+            {characterConfig && (
+                <div className="absolute inset-0 flex items-center justify-center z-10 top-4">
+                    <PixelAvatar config={characterConfig} scale={8} animate={true} />
+                </div>
+            )}
+            
+            <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-4 border-t border-cyan-500 z-20">
+               <p className="text-[10px] text-cyan-500 font-mono uppercase mb-1">VISUAL DATA DECODED ({isSelfie ? 'BIOMETRIC SCAN' : 'ENVIRONMENT SCAN'}):</p>
                <p className="text-white font-mono text-sm leading-tight italic">"{description}"</p>
             </div>
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="text-cyan-400 font-mono text-xs animate-pulse bg-black/50 px-2 rounded">PSYCHIC PAPER PROJECTING...</span>
-            </div>
-            <div className="absolute bottom-0 left-0 right-0 h-1 bg-cyan-500 animate-[scan-line_3s_linear_infinite]"></div>
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-cyan-500 animate-[scan-line_3s_linear_infinite] z-20"></div>
         </div>
-        <button onClick={onClose} className="mt-6 px-6 py-2 border border-cyan-500 text-cyan-400 rounded hover:bg-cyan-900/50 font-['Audiowide']">CLOSE VISUAL LINK</button>
+        <button onClick={onClose} className="mt-6 px-6 py-2 border border-cyan-500 text-cyan-400 rounded hover:bg-cyan-900/50 font-['Audiowide'] hover:scale-105 transition-all shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_40px_rgba(34,211,238,0.5)]">CLOSE VISUAL LINK</button>
     </div>
   );
 };
@@ -427,7 +506,9 @@ const App: React.FC = () => {
       scriptProcessorRef.current = scriptProcessor;
       
       const { memory, score } = loadMemory(activeCaller.id);
-      const systemInstructionText = getSystemInstruction(activeCaller, memory, score);
+      // Get User Name from Avatar Config
+      const userName = avatarConfig.name || "Traveler";
+      const systemInstructionText = getSystemInstruction(activeCaller, memory, score, userName);
 
       const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
@@ -515,8 +596,8 @@ const App: React.FC = () => {
           inputAudioTranscription: {}, 
           outputAudioTranscription: {}, 
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: activeCaller.voiceName || 'Puck' } } },
-          // STRICT CONTENT FORMAT FOR SYSTEM INSTRUCTION WITH TOOLS
-          systemInstruction: { parts: [{ text: systemInstructionText }] },
+          // PLAIN STRING SYSTEM INSTRUCTION FOR ROBUSTNESS
+          systemInstruction: systemInstructionText,
         }
       });
       sessionRef.current = await sessionPromise;
@@ -567,6 +648,10 @@ const App: React.FC = () => {
     const master = POTENTIAL_CALLERS.find(c => c.id === 'master_missy');
     if (master && master.scenarios) startConversation({ ...master, currentScenario: master.scenarios[Math.floor(Math.random() * master.scenarios.length)] });
   };
+  const handleCallRiver = () => {
+    const river = POTENTIAL_CALLERS.find(c => c.id === 'river_song');
+    if (river && river.scenarios) startConversation({ ...river, currentScenario: river.scenarios[Math.floor(Math.random() * river.scenarios.length)] });
+  };
 
   return (
     <div className={`relative w-full h-screen bg-black overflow-hidden flex flex-col items-center justify-center text-white transition-all duration-100 ${isGlitching ? 'translate-x-1 grayscale' : ''}`}>
@@ -583,7 +668,7 @@ const App: React.FC = () => {
       )}
 
       {showRecipientModal && ( <RecipientSelector onSelect={handlePhotoRecipientSelect} onCancel={() => { setShowRecipientModal(false); setPendingPhoto(null); }} /> )}
-      {receivedPhotoData && ( <ReceivedPhotoOverlay description={receivedPhotoData.description} onClose={() => setReceivedPhotoData(null)} /> )}
+      {receivedPhotoData && ( <ReceivedPhotoOverlay description={receivedPhotoData.description} onClose={() => setReceivedPhotoData(null)} caller={caller} /> )}
       
       {permissionError && (
           <div className="absolute top-10 z-50 bg-red-900 border border-red-500 text-white p-4 rounded shadow-lg max-w-sm text-center">
@@ -602,9 +687,9 @@ const App: React.FC = () => {
         </div>
         
         {/* Main Visualizer Area */}
-        <div className="relative w-80 h-80 flex items-center justify-center">
-           <div className={`absolute w-full h-full border-4 border-cyan-900/30 rounded-full animate-[spin_10s_linear_infinite] ${isGlitching ? 'border-red-900/50' : ''}`}></div>
-           <div className="absolute w-3/4 h-3/4 border-2 border-dashed border-cyan-500/20 rounded-full animate-[spin_15s_linear_infinite_reverse]"></div>
+        <div className="relative w-80 h-80 flex items-center justify-center group/rotor">
+           <div className={`absolute w-full h-full border-4 border-cyan-900/30 rounded-full animate-[spin_10s_linear_infinite] ${isGlitching ? 'border-red-900/50' : ''} group-hover/rotor:border-cyan-500/40 group-hover/rotor:shadow-[0_0_40px_rgba(34,211,238,0.2)] transition-all duration-500`}></div>
+           <div className="absolute w-3/4 h-3/4 border-2 border-dashed border-cyan-500/20 rounded-full animate-[spin_15s_linear_infinite_reverse] group-hover/rotor:border-cyan-400/40 transition-all duration-500"></div>
            
            <ParticleVisualizer analyser={analyserRef.current} isActive={appState === AppState.CONNECTED} isGlitching={isGlitching} />
            
@@ -614,6 +699,7 @@ const App: React.FC = () => {
                    <div className="relative flex flex-col items-center">
                        <PixelAvatar config={avatarConfig} scale={3} animate={true} />
                        <span className="text-[8px] text-cyan-600 mt-2 tracking-widest bg-black/50 px-1 rounded border border-cyan-900">PILOT ID</span>
+                       <span className="text-[10px] text-white font-mono mt-1 uppercase">{avatarConfig.name || "TRAVELER"}</span>
                    </div>
                </div>
            )}
@@ -643,66 +729,63 @@ const App: React.FC = () => {
               {appState === AppState.IDLE && (
                 <>
                     <div className="flex flex-col items-center justify-end h-full">
-                       <button onClick={handleManualCall} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105" aria-label="Call The Doctor">
-                        <div className="w-16 h-16 rounded-full bg-cyan-900 border-4 border-cyan-400 flex items-center justify-center shadow-[0_0_20px_rgba(34,211,238,0.3)] group-hover:shadow-[0_0_50px_rgba(34,211,238,0.6)] transition-all"><PhoneIcon /></div>
-                        <span className="text-cyan-400 font-bold tracking-widest text-[10px] group-hover:text-cyan-200">DOCTOR</span>
+                       <button onClick={handleManualCall} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-110 duration-300" aria-label="Call The Doctor">
+                        <div className="w-16 h-16 rounded-full bg-cyan-900 border-4 border-cyan-400 flex items-center justify-center shadow-[0_0_20px_rgba(34,211,238,0.3)] group-hover:shadow-[0_0_50px_rgba(34,211,238,0.8)] group-hover:border-cyan-200 group-hover:bg-cyan-800 transition-all duration-300"><PhoneIcon /></div>
+                        <span className="text-cyan-400 font-bold tracking-widest text-[10px] group-hover:text-cyan-100 group-hover:drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]">DOCTOR</span>
                       </button>
                     </div>
                     
                     <div className="flex flex-col items-center justify-end h-full">
-                       <button onClick={() => setShowAvatarEditor(true)} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105" aria-label="Edit Avatar">
-                        <div className="w-16 h-16 rounded-full bg-slate-800 border-4 border-slate-500 flex items-center justify-center shadow-[0_0_20px_rgba(148,163,184,0.3)] group-hover:shadow-[0_0_50px_rgba(148,163,184,0.6)] transition-all">
-                             <UserIcon />
-                        </div>
-                        <span className="text-slate-400 font-bold tracking-widest text-[10px] group-hover:text-slate-200">IDENTITY</span>
+                      <button onClick={() => fileInputRef.current?.click()} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-110 duration-300" aria-label="Send Photo">
+                        <div className="w-16 h-16 rounded-full bg-blue-900 border-4 border-blue-400 flex items-center justify-center shadow-[0_0_20px_rgba(96,165,250,0.3)] group-hover:shadow-[0_0_50px_rgba(96,165,250,0.8)] group-hover:border-blue-200 group-hover:bg-blue-800 transition-all duration-300"><CameraIcon /></div>
+                        <span className="text-blue-400 font-bold tracking-widest text-[10px] group-hover:text-blue-100 group-hover:drop-shadow-[0_0_5px_rgba(96,165,250,0.8)]">SEND IMG</span>
                       </button>
                     </div>
+                    
+                    <div className="flex flex-col items-center justify-end h-full">
+                      {/* RIVER SONG BUTTON */}
+                      <button onClick={handleCallRiver} className="group relative flex flex-col items-center gap-1 transition-all hover:scale-110 duration-300 mb-2" aria-label="Call River Song">
+                        <div className="w-12 h-12 rounded-full bg-yellow-900 border-4 border-yellow-400 flex items-center justify-center shadow-[0_0_20px_rgba(250,204,21,0.3)] group-hover:shadow-[0_0_50px_rgba(250,204,21,0.8)] group-hover:border-yellow-200 group-hover:bg-yellow-800 transition-all duration-300"><BookIcon /></div>
+                        <span className="text-yellow-400 font-bold tracking-widest text-[8px] group-hover:text-yellow-100">RIVER</span>
+                      </button>
 
-                    <div className="flex flex-col items-center justify-end h-full">
-                      <button onClick={() => fileInputRef.current?.click()} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105" aria-label="Send Photo">
-                        <div className="w-16 h-16 rounded-full bg-blue-900 border-4 border-blue-400 flex items-center justify-center shadow-[0_0_20px_rgba(96,165,250,0.3)] group-hover:shadow-[0_0_50px_rgba(96,165,250,0.6)] transition-all"><CameraIcon /></div>
-                        <span className="text-blue-400 font-bold tracking-widest text-[10px] group-hover:text-blue-200">SEND IMG</span>
-                      </button>
-                    </div>
-                    
-                    <div className="flex flex-col items-center justify-end h-full">
                       <AffectionMeter score={scores['friend_sam'] || 1} color="bg-pink-500" />
-                      <button onClick={handleCallFriend} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105" aria-label="Call Bestie">
-                        <div className="w-16 h-16 rounded-full bg-pink-900 border-4 border-pink-400 flex items-center justify-center shadow-[0_0_20px_rgba(244,114,182,0.3)] group-hover:shadow-[0_0_50px_rgba(244,114,182,0.6)] transition-all"><StarIcon /></div>
-                        <span className="text-pink-400 font-bold tracking-widest text-[10px] group-hover:text-pink-200">BESTIE</span>
+                      <button onClick={handleCallFriend} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-110 duration-300" aria-label="Call Bestie">
+                        <div className="w-16 h-16 rounded-full bg-pink-900 border-4 border-pink-400 flex items-center justify-center shadow-[0_0_20px_rgba(244,114,182,0.3)] group-hover:shadow-[0_0_50px_rgba(244,114,182,0.8)] group-hover:border-pink-200 group-hover:bg-pink-800 transition-all duration-300"><StarIcon /></div>
+                        <span className="text-pink-400 font-bold tracking-widest text-[10px] group-hover:text-pink-100 group-hover:drop-shadow-[0_0_5px_rgba(244,114,182,0.8)]">BESTIE</span>
                       </button>
                     </div>
                     <div className="flex flex-col items-center justify-end h-full">
                       <AffectionMeter score={scores['ex_partner'] || 1} color="bg-purple-500" />
-                      <button onClick={handleCallEx} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105" aria-label="Call Ex">
-                        <div className="w-16 h-16 rounded-full bg-purple-900 border-4 border-purple-400 flex items-center justify-center shadow-[0_0_20px_rgba(192,132,252,0.3)] group-hover:shadow-[0_0_50px_rgba(192,132,252,0.6)] transition-all"><BrokenHeartIcon /></div>
-                        <span className="text-purple-400 font-bold tracking-widest text-[10px] group-hover:text-purple-200">EX</span>
+                      <button onClick={handleCallEx} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-110 duration-300" aria-label="Call Ex">
+                        <div className="w-16 h-16 rounded-full bg-purple-900 border-4 border-purple-400 flex items-center justify-center shadow-[0_0_20px_rgba(192,132,252,0.3)] group-hover:shadow-[0_0_50px_rgba(192,132,252,0.8)] group-hover:border-purple-200 group-hover:bg-purple-800 transition-all duration-300"><BrokenHeartIcon /></div>
+                        <span className="text-purple-400 font-bold tracking-widest text-[10px] group-hover:text-purple-100 group-hover:drop-shadow-[0_0_5px_rgba(192,132,252,0.8)]">EX</span>
                       </button>
                     </div>
                     <div className="flex flex-col items-center justify-end h-full">
                       <AffectionMeter score={scores['master_missy'] || 1} color="bg-green-500" />
-                      <button onClick={handleCallMaster} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105" aria-label="Call Missy">
-                        <div className="w-16 h-16 rounded-full bg-green-900 border-4 border-green-400 flex items-center justify-center shadow-[0_0_20px_rgba(74,222,128,0.3)] group-hover:shadow-[0_0_50px_rgba(74,222,128,0.6)] transition-all"><SkullIcon /></div>
-                        <span className="text-green-400 font-bold tracking-widest text-[10px] group-hover:text-green-200">MISSY</span>
+                      <button onClick={handleCallMaster} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-110 duration-300" aria-label="Call Missy">
+                        <div className="w-16 h-16 rounded-full bg-green-900 border-4 border-green-400 flex items-center justify-center shadow-[0_0_20px_rgba(74,222,128,0.3)] group-hover:shadow-[0_0_50px_rgba(74,222,128,0.8)] group-hover:border-green-200 group-hover:bg-green-800 transition-all duration-300"><SkullIcon /></div>
+                        <span className="text-green-400 font-bold tracking-widest text-[10px] group-hover:text-green-100 group-hover:drop-shadow-[0_0_5px_rgba(74,222,128,0.8)]">MISSY</span>
                       </button>
                     </div>
                 </>
               )}
               {appState === AppState.INCOMING_CALL && (
                 <button onClick={handleAnswerCall} className="group relative flex flex-col items-center gap-2 animate-bounce">
-                  <div className="w-24 h-24 rounded-full bg-orange-600 border-4 border-orange-400 flex items-center justify-center shadow-[0_0_30px_rgba(255,165,0,0.6)]"><PhoneIcon /></div>
-                  <span className="text-orange-400 font-bold tracking-widest text-sm">ANSWER</span>
+                  <div className="w-24 h-24 rounded-full bg-orange-600 border-4 border-orange-400 flex items-center justify-center shadow-[0_0_30px_rgba(255,165,0,0.6)] group-hover:shadow-[0_0_60px_rgba(255,165,0,0.9)] group-hover:scale-110 transition-all"><PhoneIcon /></div>
+                  <span className="text-orange-400 font-bold tracking-widest text-sm group-hover:text-orange-200">ANSWER</span>
                 </button>
               )}
               {(appState === AppState.CONNECTED || appState === AppState.CONNECTING) && (
                 <>
-                <button onClick={handleEndCall} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105">
-                  <div className="w-20 h-20 rounded-full bg-red-900 border-2 border-red-500 flex items-center justify-center shadow-[0_0_20px_rgba(239,68,68,0.3)] group-hover:shadow-[0_0_40px_rgba(239,68,68,0.6)]"><PhoneOffIcon /></div>
-                  <span className="text-red-500 font-bold tracking-widest text-xs">SEVER LINK</span>
+                <button onClick={handleEndCall} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105 duration-300">
+                  <div className="w-20 h-20 rounded-full bg-red-900 border-2 border-red-500 flex items-center justify-center shadow-[0_0_20px_rgba(239,68,68,0.3)] group-hover:shadow-[0_0_50px_rgba(239,68,68,0.8)] group-hover:border-red-300 group-hover:bg-red-800 transition-all"><PhoneOffIcon /></div>
+                  <span className="text-red-500 font-bold tracking-widest text-xs group-hover:text-red-200">SEVER LINK</span>
                 </button>
-                <button onClick={() => {}} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105" title="Ask for a photo">
-                  <div className="w-16 h-16 rounded-full bg-cyan-900/50 border-2 border-cyan-400 flex items-center justify-center shadow-[0_0_20px_rgba(34,211,238,0.2)]"><DownloadIcon /></div>
-                  <span className="text-cyan-400 font-bold tracking-widest text-[8px]">REQ IMG</span>
+                <button onClick={() => {}} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105 duration-300" title="Ask for a photo">
+                  <div className="w-16 h-16 rounded-full bg-cyan-900/50 border-2 border-cyan-400 flex items-center justify-center shadow-[0_0_20px_rgba(34,211,238,0.2)] group-hover:shadow-[0_0_40px_rgba(34,211,238,0.6)] group-hover:border-cyan-200 group-hover:bg-cyan-800/80 transition-all"><DownloadIcon /></div>
+                  <span className="text-cyan-400 font-bold tracking-widest text-[8px] group-hover:text-cyan-200">REQ IMG</span>
                 </button>
                 </>
               )}
