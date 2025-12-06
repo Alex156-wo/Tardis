@@ -373,6 +373,7 @@ const App: React.FC = () => {
 
   const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(DEFAULT_AVATAR);
   const [showAvatarEditor, setShowAvatarEditor] = useState(false);
+  const [userApiKey, setUserApiKey] = useState<string>('');
 
   const [customContacts, setCustomContacts] = useState<{ [key: string]: { name: string, persona: string } }>({});
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
@@ -410,7 +411,15 @@ const App: React.FC = () => {
     if (savedContacts) {
       try { setCustomContacts(JSON.parse(savedContacts)); } catch(e) {}
     }
+
+    const storedKey = localStorage.getItem('gemini_api_key');
+    if (storedKey) setUserApiKey(storedKey);
   }, []);
+
+  const handleApiKeyChange = (key: string) => {
+    setUserApiKey(key);
+    localStorage.setItem('gemini_api_key', key);
+  };
 
   const saveAvatar = (config: AvatarConfig) => {
       setAvatarConfig(config);
@@ -559,6 +568,13 @@ const App: React.FC = () => {
   }, [stopAudio]);
 
   const startConversation = async (specificCaller?: CallerIdentity, isGameMode: boolean = false) => {
+    const apiKey = userApiKey || process.env.API_KEY;
+    if (!apiKey) {
+      alert("TARDIS SYSTEM ERROR: No Power Source Detected. Please enter a valid Gemini API Key in the Identity Matrix.");
+      setAppState(AppState.IDLE);
+      return;
+    }
+
     try {
       setAppState(AppState.CONNECTING);
       setPermissionError(false);
@@ -574,7 +590,7 @@ const App: React.FC = () => {
       setCaller(activeCaller);
       currentCallerIdRef.current = activeCaller.id; 
 
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
       
       let stream: MediaStream;
       try {
@@ -800,6 +816,8 @@ const App: React.FC = () => {
             config={avatarConfig} 
             onChange={setAvatarConfig} 
             onClose={() => { saveAvatar(avatarConfig); setShowAvatarEditor(false); }} 
+            apiKey={userApiKey}
+            onApiKeyChange={handleApiKeyChange}
         />
       )}
 

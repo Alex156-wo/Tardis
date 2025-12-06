@@ -136,9 +136,11 @@ interface AvatarEditorProps {
     config: AvatarConfig;
     onChange: (newConfig: AvatarConfig) => void;
     onClose: () => void;
+    apiKey: string;
+    onApiKeyChange: (key: string) => void;
 }
 
-export const AvatarEditor: React.FC<AvatarEditorProps> = ({ config, onChange, onClose }) => {
+export const AvatarEditor: React.FC<AvatarEditorProps> = ({ config, onChange, onClose, apiKey, onApiKeyChange }) => {
     
     const update = (key: keyof AvatarConfig, value: any) => {
         onChange({ ...config, [key]: value });
@@ -154,7 +156,7 @@ export const AvatarEditor: React.FC<AvatarEditorProps> = ({ config, onChange, on
                 <h2 className="text-2xl font-['Audiowide'] text-cyan-400 mb-6 text-center tracking-widest">IDENTITY MATRIX</h2>
                 
                 <div className="flex flex-col md:flex-row gap-8 items-center justify-center mb-6">
-                    <div className="flex flex-col items-center gap-4">
+                    <div className="flex flex-col items-center gap-4 w-full md:w-1/2">
                         <div className="p-4 bg-cyan-900/30 rounded-lg border border-cyan-700">
                             <PixelAvatar config={config} scale={8} animate={true} />
                         </div>
@@ -169,9 +171,22 @@ export const AvatarEditor: React.FC<AvatarEditorProps> = ({ config, onChange, on
                                 className="w-full bg-black/50 border border-cyan-700 rounded px-2 py-1 text-cyan-300 font-mono text-sm focus:border-cyan-400 outline-none uppercase"
                             />
                         </div>
+
+                         {/* API KEY INPUT */}
+                         <div className="w-full">
+                            <label className="text-[10px] text-yellow-500 font-mono tracking-wider block mb-1">QUANTUM LINK (API KEY)</label>
+                            <input 
+                                type="password" 
+                                value={apiKey} 
+                                onChange={(e) => onApiKeyChange(e.target.value)}
+                                placeholder="Paste Gemini API Key..."
+                                className="w-full bg-black/50 border border-yellow-700/50 rounded px-2 py-1 text-yellow-300 font-mono text-sm focus:border-yellow-400 outline-none"
+                            />
+                            <p className="text-[8px] text-gray-500 mt-1">Required if not configured on deployment.</p>
+                        </div>
                     </div>
                     
-                    <div className="space-y-4 w-full">
+                    <div className="space-y-4 w-full md:w-1/2">
                         {/* Gender */}
                         <div className="flex gap-2 justify-center">
                             <button onClick={() => update('gender', 'male')} className={`px-4 py-1 rounded border ${config.gender === 'male' ? 'bg-cyan-600 border-cyan-400' : 'border-gray-600 text-gray-400'}`}>MALE</button>
