@@ -363,6 +363,7 @@ const App: React.FC = () => {
   const [isGlitching, setIsGlitching] = useState(false);
   const [scores, setScores] = useState<{ [key: string]: number }>({});
   const [permissionError, setPermissionError] = useState<boolean>(false);
+  const [apiKeyError, setApiKeyError] = useState<boolean>(false);
   
   const [showRecipientModal, setShowRecipientModal] = useState(false);
   const [showGameSelector, setShowGameSelector] = useState(false);
@@ -419,6 +420,7 @@ const App: React.FC = () => {
   const handleApiKeyChange = (key: string) => {
     setUserApiKey(key);
     localStorage.setItem('gemini_api_key', key);
+    setApiKeyError(false);
   };
 
   const saveAvatar = (config: AvatarConfig) => {
@@ -552,7 +554,6 @@ const App: React.FC = () => {
 
   const handleEndCall = useCallback(() => {
     // Check if the call was incredibly short (likely a connection drop/glitch)
-    // If so, we log it but proceed to reset. To be safer, we could auto-retry or just warn.
     const duration = Date.now() - startTimeRef.current;
     if (duration < 1000) {
        console.warn("Call ended too quickly (likely connection drop). Resetting UI.");
@@ -568,10 +569,15 @@ const App: React.FC = () => {
   }, [stopAudio]);
 
   const startConversation = async (specificCaller?: CallerIdentity, isGameMode: boolean = false) => {
-    const apiKey = userApiKey || process.env.API_KEY;
+    // Safe access to process.env for browser compatibility
+    // Using userApiKey first, then falling back to env var safely
+    const envApiKey = (typeof process !== 'undefined' && process.env) ? process.env.API_KEY : '';
+    const apiKey = userApiKey || envApiKey;
+    
     if (!apiKey) {
-      alert("TARDIS SYSTEM ERROR: No Power Source Detected. Please enter a valid Gemini API Key in the Identity Matrix.");
-      setAppState(AppState.IDLE);
+      setApiKeyError(true);
+      setShowAvatarEditor(true); // Open editor to let user input key
+      // alert("TARDIS SYSTEM ERROR: No Power Source (API KEY). Please enter a valid Gemini API Key in the Identity Matrix.");
       return;
     }
 
@@ -708,11 +714,12 @@ const App: React.FC = () => {
         config: {
           tools: [{ functionDeclarations: [SEND_PHOTO_TOOL] }],
           responseModalities: ['AUDIO'], 
-          inputAudioTranscription: {}, 
-          outputAudioTranscription: {}, 
+          // Removing explicit transcription config to improve stability in some regions/browsers
+          // inputAudioTranscription: {}, 
+          // outputAudioTranscription: {}, 
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: activeCaller.voiceName || 'Puck' } } },
-          // Unwrapped system instruction for better stability
-          systemInstruction: systemInstructionText,
+          // Unwrapped system instruction to plain string for better compatibility in Connect method
+          systemInstruction: { parts: [{ text: systemInstructionText }] },
         }
       });
       sessionRef.current = await sessionPromise;
@@ -849,6 +856,15 @@ const App: React.FC = () => {
               <button onClick={() => setPermissionError(false)} className="mt-4 px-4 py-1 bg-red-700 rounded text-xs">DISMISS</button>
           </div>
       )}
+
+      {apiKeyError && (
+          <div className="absolute top-32 z-50 bg-yellow-900/90 border border-yellow-500 text-white p-4 rounded shadow-lg max-w-sm text-center">
+              <p className="font-bold mb-2">API KEY REQUIRED</p>
+              <p className="text-sm">Please click the hologram avatar in the center to enter your Gemini API Key.</p>
+              <button onClick={() => setApiKeyError(false)} className="mt-4 px-4 py-1 bg-yellow-700 rounded text-xs">OK</button>
+          </div>
+      )}
+      
       <input type="file" ref={fileInputRef} onChange={handlePhotoUpload} accept="image/*" className="hidden" />
 
       <div className="relative z-20 w-full max-w-4xl h-full flex flex-col items-center justify-between py-12">
@@ -865,17 +881,24 @@ const App: React.FC = () => {
            <ParticleVisualizer analyser={analyserRef.current} isActive={appState === AppState.CONNECTED} isGlitching={isGlitching} />
            
            {appState === AppState.IDLE && (
-               <div className="absolute z-15 animate-pulse cursor-pointer transition-transform hover:scale-110" onClick={() => setShowAvatarEditor(true)} title="Edit Hologram Identity">
+               <div className="absolute z-15 flex flex-col items-center animate-pulse cursor-pointer transition-transform hover:scale-110" onClick={() => setShowAvatarEditor(true)} title="Edit Hologram Identity">
                    <div className="relative flex flex-col items-center">
                        <PixelAvatar config={avatarConfig} scale={3} animate={true} />
                        <span className="text-[8px] text-cyan-600 mt-2 tracking-widest bg-black/50 px-1 rounded border border-cyan-900">PILOT ID</span>
-                       <span className="text-[10px] text-white font-mono mt-1 uppercase">{avatarConfig.name || "TRAVELER"}</span>
+                       <span className="text-[10px] text-white font-mono mt-1 uppercase mb-1">{avatarConfig.name || "TRAVELER"}</span>
+                       
+                       {/* API KEY STATUS INDICATOR BUTTON */}
+                       <button 
+                         className={`text-[8px] font-bold px-2 py-0.5 rounded border ${userApiKey ? 'bg-cyan-900/50 border-cyan-500 text-cyan-300' : 'bg-yellow-900/50 border-yellow-500 text-yellow-300 animate-pulse'}`}
+                       >
+                         {userApiKey ? "KEY ACTIVE" : "INSERT KEY"}
+                       </button>
                    </div>
                </div>
            )}
 
            <div className="absolute z-20 text-center pointer-events-none">
-              {appState === AppState.IDLE && ( <span className="text-blue-500/50 text-xs animate-pulse mt-24 block">Awaiting Input...</span> )}
+              {appState === AppState.IDLE && ( <span className="text-blue-500/50 text-xs animate-pulse mt-28 block">Awaiting Input...</span> )}
               {appState === AppState.CONNECTING && ( <span className="text-orange-400 text-lg animate-pulse font-bold">MATERIALIZING...</span> )}
               {appState === AppState.INCOMING_CALL && (
                  <div className="flex flex-col items-center gap-2">

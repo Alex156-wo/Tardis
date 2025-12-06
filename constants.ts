@@ -1,6 +1,21 @@
 
 import { CallerIdentity } from "./types";
-import { FunctionDeclaration } from "@google/genai";
+
+// Local interface to avoid build issues with SDK imports
+interface ToolDeclaration {
+  name: string;
+  description: string;
+  parameters: {
+    type: string;
+    properties: {
+      [key: string]: {
+        type: string;
+        description: string;
+      };
+    };
+    required: string[];
+  };
+}
 
 export const DOCTOR_VOICE_NAME = 'Puck'; 
 export const TARDIS_BLUE = '#003b6f';
@@ -11,7 +26,7 @@ export const PARTICLE_BLUE = 'rgba(0, 191, 255, 0.8)';
 export const MAX_RELATIONSHIP_SCORE = 10;
 
 // Use string literals to avoid Enum import issues causing load failures
-export const SEND_PHOTO_TOOL: FunctionDeclaration = {
+export const SEND_PHOTO_TOOL: ToolDeclaration = {
   name: "sendPhoto",
   description: "Send a visual image/photo of your current surroundings or an object to the user.",
   parameters: {
@@ -381,6 +396,7 @@ export const getSystemInstruction = (caller: CallerIdentity, previousContext: st
     4. **KEEP RESPONSES SHORT**: Max 1-3 sentences. Rapid fire.
     5. **NEVER HANG UP**: Keep the drama going.
     6. **ALWAYS ENGLISH**: Speak English only.
+    7. **IGNORE GLITCHES**: If the audio cuts out, improvise. Do not say "I cannot hear you". Say "The signal is breaking up!" or "The TARDIS is humming too loud!".
     
     RELATIONSHIP STATUS:
     ${relationshipContext}
@@ -388,7 +404,7 @@ export const getSystemInstruction = (caller: CallerIdentity, previousContext: st
     MEMORY OF PREVIOUS CONVERSATIONS:
     "${previousContext}"
     
-    ${caller.initialImage ? 'CONTEXT UPDATE: The user just sent you a photo. React to it immediately!' : ''}
+    ${caller.initialImage ? 'CONTEXT UPDATE: The user just sent you a photo. React to it immediately! Describe what you see in the photo and ask about it.' : ''}
   `;
 
   if (caller.type === 'DOCTOR') {

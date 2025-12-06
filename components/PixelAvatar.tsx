@@ -160,6 +160,7 @@ export const AvatarEditor: React.FC<AvatarEditorProps> = ({ config, onChange, on
                         <div className="p-4 bg-cyan-900/30 rounded-lg border border-cyan-700">
                             <PixelAvatar config={config} scale={8} animate={true} />
                         </div>
+                        
                         {/* NAME INPUT */}
                         <div className="w-full">
                             <label className="text-[10px] text-cyan-500 font-mono tracking-wider block mb-1">DESIGNATION (NAME)</label>
@@ -173,16 +174,19 @@ export const AvatarEditor: React.FC<AvatarEditorProps> = ({ config, onChange, on
                         </div>
 
                          {/* API KEY INPUT */}
-                         <div className="w-full">
-                            <label className="text-[10px] text-yellow-500 font-mono tracking-wider block mb-1">QUANTUM LINK (API KEY)</label>
+                         <div className="w-full pt-4 border-t border-cyan-900/50 mt-2">
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="text-[10px] text-yellow-500 font-mono tracking-wider block">QUANTUM KEY (API KEY)</label>
+                                <span className="text-[8px] text-gray-500">🔒 STORED LOCALLY</span>
+                            </div>
                             <input 
                                 type="password" 
                                 value={apiKey} 
                                 onChange={(e) => onApiKeyChange(e.target.value)}
-                                placeholder="Paste Gemini API Key..."
+                                placeholder="Paste Google API Key..."
                                 className="w-full bg-black/50 border border-yellow-700/50 rounded px-2 py-1 text-yellow-300 font-mono text-sm focus:border-yellow-400 outline-none"
                             />
-                            <p className="text-[8px] text-gray-500 mt-1">Required if not configured on deployment.</p>
+                            <p className="text-[8px] text-gray-500 mt-1">Allows use of your own Gemini quota.</p>
                         </div>
                     </div>
                     
