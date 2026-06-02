@@ -59,6 +59,24 @@ const GamepadIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="15" y1="13" x2="15.01" y2="13"/><line x1="18" y1="11" x2="18.01" y2="11"/><rect x="2" y="6" width="20" height="12" rx="2"/></svg>
 );
 
+
+const CONTACT_UNLOCK_THRESHOLD = 3;
+const CORE_CONTACT_IDS = ['doctor', 'river_song', 'master_missy'];
+const PERSONAL_ANCHOR_SLOTS = [
+  { id: 'personal_anchor_1', label: 'ANCHOR 01', hint: 'Family / close friend' },
+  { id: 'personal_anchor_2', label: 'ANCHOR 02', hint: 'Friend / classmate / coworker' },
+  { id: 'personal_anchor_3', label: 'ANCHOR 03', hint: 'Neighbor / trusted ordinary person' },
+];
+const PERSONAL_ANCHOR_SCENARIOS = [
+  "You are an ordinary person close to the user. You just saw an impossible blue box appear near the user and you are calling in panic.",
+  "You noticed the user receiving a call from an important official and you are trying to sound calm while asking what is going on.",
+  "You accidentally overheard the words 'alien incident' and the user's name in the same sentence. You are worried, confused, and trying not to overreact.",
+  "A strange local event happened near you: time skipped, lights flickered, or a statue moved. You are calling the user because somehow they always know weird things.",
+  "You are calling about a normal daily issue, but you slowly realize the user is dealing with something much bigger and more impossible.",
+  "You saw the user vanish for a second in a shimmer of blue light. You are calling to ask whether they are okay and why this keeps happening."
+];
+
+
 // --- LONG PRESS BUTTON COMPONENT ---
 interface LongPressButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   onLongPress: () => void;
@@ -378,6 +396,13 @@ const App: React.FC = () => {
 
   const [customContacts, setCustomContacts] = useState<{ [key: string]: { name: string, persona: string } }>({});
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
+  const [incomingCounts, setIncomingCounts] = useState<{ [key: string]: number }>({});
+  const [mobileTime, setMobileTime] = useState<string>(() => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+  const [mobileTab, setMobileTab] = useState<'contacts' | 'events' | 'memory' | 'settings'>('contacts');
+  const [contactSearch, setContactSearch] = useState('');
+  const [favoriteContacts, setFavoriteContacts] = useState<string[]>([]);
+  const [captionMode, setCaptionMode] = useState<'original' | 'translation' | 'bilingual'>('original');
+  const [liveTranscript, setLiveTranscript] = useState<HistoryItem[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputAudioContextRef = useRef<AudioContext | null>(null);
@@ -394,6 +419,21 @@ const App: React.FC = () => {
   const currentCallerIdRef = useRef<string>(POTENTIAL_CALLERS[0].id); 
   const startTimeRef = useRef<number>(0);
   const cleanupInProgressRef = useRef<boolean>(false);
+  const swipeStartXRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const tick = () => setMobileTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    tick();
+    const timer = window.setInterval(tick, 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const savedFavorites = localStorage.getItem('favorite_contacts');
+    if (savedFavorites) {
+      try { setFavoriteContacts(JSON.parse(savedFavorites)); } catch(e) {}
+    }
+  }, []);
 
   useEffect(() => {
     const newScores: { [key: string]: number } = {};
@@ -415,6 +455,11 @@ const App: React.FC = () => {
 
     const storedKey = localStorage.getItem('gemini_api_key');
     if (storedKey) setUserApiKey(storedKey);
+
+    const savedIncomingCounts = localStorage.getItem('incoming_call_counts');
+    if (savedIncomingCounts) {
+      try { setIncomingCounts(JSON.parse(savedIncomingCounts)); } catch(e) {}
+    }
   }, []);
 
   const handleApiKeyChange = (key: string) => {
@@ -429,7 +474,10 @@ const App: React.FC = () => {
   };
 
   const handleSaveContact = (id: string, name: string, persona: string) => {
-    const updated = { ...customContacts, [id]: { name, persona } };
+    const trimmedName = name.trim();
+    const trimmedPersona = persona.trim();
+    if (PERSONAL_ANCHOR_SLOTS.some(slot => slot.id === id) && !trimmedName) return;
+    const updated = { ...customContacts, [id]: { name: trimmedName, persona: trimmedPersona } };
     setCustomContacts(updated);
     localStorage.setItem('custom_contacts', JSON.stringify(updated));
     setEditingContactId(null);
@@ -472,6 +520,46 @@ const App: React.FC = () => {
     return { memory, score };
   }, []);
 
+  const getAllKnownCallers = useCallback((): CallerIdentity[] => {
+    const base = [...POTENTIAL_CALLERS, ...VIP_CALLERS];
+    const customAnchors: CallerIdentity[] = PERSONAL_ANCHOR_SLOTS
+      .filter(slot => customContacts[slot.id]?.name)
+      .map(slot => ({
+        id: slot.id,
+        name: customContacts[slot.id].name,
+        type: 'EARTH' as const,
+        voiceName: 'Zephyr',
+        scenarios: PERSONAL_ANCHOR_SCENARIOS,
+        customPersona: customContacts[slot.id].persona,
+      }));
+    return [...base, ...customAnchors];
+  }, [customContacts]);
+
+  const getCallerById = useCallback((callerId: string): CallerIdentity | undefined => {
+    return getAllKnownCallers().find(c => c.id === callerId);
+  }, [getAllKnownCallers]);
+
+  const hydrateCallerForConversation = useCallback((baseCaller: CallerIdentity): CallerIdentity => {
+    let activeCaller = { ...baseCaller };
+    const customData = customContacts[activeCaller.id];
+    if (customData) {
+      activeCaller.name = customData.name;
+      activeCaller.customPersona = customData.persona;
+    }
+    if (activeCaller.scenarios && activeCaller.scenarios.length > 0 && !activeCaller.currentScenario) {
+      activeCaller.currentScenario = activeCaller.scenarios[Math.floor(Math.random() * activeCaller.scenarios.length)];
+    } else if (activeCaller.type === 'DOCTOR' && !activeCaller.adventure) {
+      activeCaller.adventure = DOCTOR_ADVENTURES[Math.floor(Math.random() * DOCTOR_ADVENTURES.length)];
+    }
+    return activeCaller;
+  }, [customContacts]);
+
+  const recordIncomingContact = useCallback((callerId: string) => {
+    if (CORE_CONTACT_IDS.includes(callerId) || PERSONAL_ANCHOR_SLOTS.some(slot => slot.id === callerId)) return;
+    const nextCounts = { ...incomingCounts, [callerId]: (incomingCounts[callerId] || 0) + 1 };
+    setIncomingCounts(nextCounts);
+    localStorage.setItem('incoming_call_counts', JSON.stringify(nextCounts));
+  }, [incomingCounts]);
   const prepareRandomCaller = useCallback(() => {
       const rand = Math.random();
       if (rand > 0.60) {
@@ -569,10 +657,7 @@ const App: React.FC = () => {
   }, [stopAudio]);
 
   const startConversation = async (specificCaller?: CallerIdentity, isGameMode: boolean = false) => {
-    // Safe access to process.env for browser compatibility
-    // Using userApiKey first, then falling back to env var safely
-    const envApiKey = (typeof process !== 'undefined' && process.env) ? process.env.API_KEY : '';
-    const apiKey = userApiKey || envApiKey;
+    const apiKey = userApiKey.trim();
     
     if (!apiKey) {
       setApiKeyError(true);
@@ -584,6 +669,7 @@ const App: React.FC = () => {
     try {
       setAppState(AppState.CONNECTING);
       setPermissionError(false);
+      setLiveTranscript([]);
       startTimeRef.current = Date.now();
       
       let activeCaller = specificCaller || caller;
@@ -592,6 +678,9 @@ const App: React.FC = () => {
       if (customData) {
         activeCaller = { ...activeCaller, name: customData.name, customPersona: customData.persona };
       }
+
+      const wasIncomingRandomCall = !specificCaller && appState === AppState.INCOMING_CALL;
+      if (wasIncomingRandomCall) recordIncomingContact(activeCaller.id);
 
       setCaller(activeCaller);
       currentCallerIdRef.current = activeCaller.id; 
@@ -634,7 +723,7 @@ const App: React.FC = () => {
       const systemInstructionText = getSystemInstruction(activeCaller, memory, score, userName, isGameMode);
 
       const sessionPromise = ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+        model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         callbacks: {
           onopen: () => {
             console.log("Connection Established");
@@ -699,8 +788,16 @@ const App: React.FC = () => {
                node.start(nextStartTimeRef.current);
                nextStartTimeRef.current += audioBuffer.duration;
             }
-            if (message.serverContent?.outputTranscription?.text) currentHistoryRef.current.push({ role: 'model', text: message.serverContent.outputTranscription.text });
-            if (message.serverContent?.inputTranscription?.text) currentHistoryRef.current.push({ role: 'user', text: message.serverContent.inputTranscription.text });
+            if (message.serverContent?.outputTranscription?.text) {
+              const item = { role: 'model' as const, text: message.serverContent.outputTranscription.text };
+              currentHistoryRef.current.push(item);
+              setLiveTranscript(prev => [...prev.slice(-8), item]);
+            }
+            if (message.serverContent?.inputTranscription?.text) {
+              const item = { role: 'user' as const, text: message.serverContent.inputTranscription.text };
+              currentHistoryRef.current.push(item);
+              setLiveTranscript(prev => [...prev.slice(-8), item]);
+            }
             if (message.serverContent?.interrupted) nextStartTimeRef.current = 0;
           },
           onclose: () => {
@@ -731,6 +828,12 @@ const App: React.FC = () => {
     }
   };
 
+  const callContact = (callerId: string, isGameMode: boolean = false) => {
+    const selected = getCallerById(callerId);
+    if (!selected) return;
+    startConversation(hydrateCallerForConversation(selected), isGameMode);
+  };
+
   const handleAnswerCall = () => { startConversation(); };
   const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
      if (event.target.files && event.target.files[0]) {
@@ -741,21 +844,14 @@ const App: React.FC = () => {
   };
   const handlePhotoRecipientSelect = (callerId: string) => {
       setShowRecipientModal(false);
-      let selectedCaller = POTENTIAL_CALLERS.find(c => c.id === callerId) || POTENTIAL_CALLERS[0];
-      let activeCaller = { ...selectedCaller };
-      if (activeCaller.scenarios && activeCaller.scenarios.length > 0) {
-          activeCaller = { ...activeCaller, currentScenario: activeCaller.scenarios[Math.floor(Math.random() * activeCaller.scenarios.length)] };
-      } else if (activeCaller.type === 'DOCTOR') {
-          activeCaller = { ...activeCaller, adventure: DOCTOR_ADVENTURES[Math.floor(Math.random() * DOCTOR_ADVENTURES.length)] };
-      }
-      activeCaller.initialImage = pendingPhoto || undefined;
+      const selectedCaller = getCallerById(callerId) || POTENTIAL_CALLERS[0];
+      const activeCaller = { ...hydrateCallerForConversation(selectedCaller), initialImage: pendingPhoto || undefined };
       startConversation(activeCaller);
   };
 
   const handleGamePartnerSelect = (callerId: string) => {
       setShowGameSelector(false);
-      let selectedCaller = POTENTIAL_CALLERS.find(c => c.id === callerId) || POTENTIAL_CALLERS[0];
-      startConversation(selectedCaller, true); 
+      callContact(callerId, true); 
   };
 
   const handleGameEvent = (eventText: string) => {
@@ -781,39 +877,97 @@ const App: React.FC = () => {
       }
   };
 
-  const handleManualCall = () => {
-    const doctor = POTENTIAL_CALLERS[0];
-    const activeDoctor = { ...doctor, adventure: DOCTOR_ADVENTURES[Math.floor(Math.random() * DOCTOR_ADVENTURES.length)] };
-    startConversation(activeDoctor);
+  const handleManualCall = () => callContact('doctor');
+  const handleCallMaster = () => callContact('master_missy');
+  const handleCallRiver = () => callContact('river_song');
+
+  const coreContacts = CORE_CONTACT_IDS
+    .map(id => getCallerById(id))
+    .filter(Boolean) as CallerIdentity[];
+  const unlockedContacts = getAllKnownCallers()
+    .filter(c => !CORE_CONTACT_IDS.includes(c.id))
+    .filter(c => !PERSONAL_ANCHOR_SLOTS.some(slot => slot.id === c.id))
+    .filter(c => (incomingCounts[c.id] || 0) >= CONTACT_UNLOCK_THRESHOLD);
+  const recentSignalLog = getAllKnownCallers()
+    .filter(c => !CORE_CONTACT_IDS.includes(c.id))
+    .filter(c => !PERSONAL_ANCHOR_SLOTS.some(slot => slot.id === c.id))
+    .filter(c => (incomingCounts[c.id] || 0) > 0 && (incomingCounts[c.id] || 0) < CONTACT_UNLOCK_THRESHOLD)
+    .sort((a, b) => (incomingCounts[b.id] || 0) - (incomingCounts[a.id] || 0))
+    .slice(0, 4);
+
+  const contactTone = (id: string) => {
+    if (id === 'doctor') return 'border-cyan-400/70 bg-cyan-950/40 text-cyan-200';
+    if (id === 'river_song') return 'border-yellow-400/70 bg-yellow-950/30 text-yellow-200';
+    if (id === 'master_missy') return 'border-green-400/70 bg-green-950/30 text-green-200';
+    if (id.startsWith('personal_anchor')) return 'border-pink-400/60 bg-pink-950/25 text-pink-100';
+    return 'border-blue-400/50 bg-blue-950/25 text-blue-100';
   };
 
-  const handleCallEx = () => {
-    const ex = POTENTIAL_CALLERS.find(c => c.id === 'ex_partner');
-    if (ex) {
-        let caller = { ...ex };
-        if (ex.scenarios) caller.currentScenario = ex.scenarios[Math.floor(Math.random() * ex.scenarios.length)];
-        startConversation(caller);
-    }
+  const relationshipLabel = (id: string) => {
+    const score = scores[id] || parseInt(localStorage.getItem(`relationship_score_${id}`) || '1');
+    if (score >= 8) return 'Trusted Signal';
+    if (score >= 5) return 'Known Contact';
+    if (score >= 2) return 'Familiar Voice';
+    return 'First Trace';
   };
-  const handleCallFriend = () => {
-    const friend = POTENTIAL_CALLERS.find(c => c.id === 'friend_sam');
-    if (friend) {
-        let caller = { ...friend };
-        if (friend.scenarios) caller.currentScenario = friend.scenarios[Math.floor(Math.random() * friend.scenarios.length)];
-        startConversation(caller);
-    }
+
+  const callerStatus = (active: CallerIdentity = caller) => {
+    if (active.id === 'doctor') return 'Doctor: Repairing TARDIS';
+    if (active.id === 'river_song') return 'River: Spoilers pending';
+    if (active.id === 'master_missy') return 'Missy: Definitely not behaving';
+    if (active.id.startsWith('personal_anchor')) return `${active.name}: Ordinary life disrupted`;
+    if (active.type === 'EARTH') return `${active.name}: Earth signal unstable`;
+    if (active.type === 'VILLAIN') return `${active.name}: Threat detected`;
+    return `${active.name}: Signal drifting`;
   };
-  const handleCallMaster = () => {
-    const master = POTENTIAL_CALLERS.find(c => c.id === 'master_missy');
-    if (master && master.scenarios) startConversation({ ...master, currentScenario: master.scenarios[Math.floor(Math.random() * master.scenarios.length)] });
+
+  const currentCrisis = caller.currentScenario || caller.adventure || (appState === AppState.CONNECTED ? 'Temporal Rift Detected' : 'Awaiting anomaly');
+
+  const toggleFavorite = (id: string) => {
+    const next = favoriteContacts.includes(id)
+      ? favoriteContacts.filter(item => item !== id)
+      : [...favoriteContacts, id];
+    setFavoriteContacts(next);
+    localStorage.setItem('favorite_contacts', JSON.stringify(next));
   };
-  const handleCallRiver = () => {
-    const river = POTENTIAL_CALLERS.find(c => c.id === 'river_song');
-    if (river && river.scenarios) startConversation({ ...river, currentScenario: river.scenarios[Math.floor(Math.random() * river.scenarios.length)] });
+
+  const personalContacts = PERSONAL_ANCHOR_SLOTS
+    .map(slot => getCallerById(slot.id))
+    .filter(Boolean) as CallerIdentity[];
+  const allDirectoryContacts = [...coreContacts, ...personalContacts, ...unlockedContacts];
+  const filteredDirectoryContacts = allDirectoryContacts.filter(contact =>
+    contact.name.toLowerCase().includes(contactSearch.toLowerCase()) ||
+    relationshipLabel(contact.id).toLowerCase().includes(contactSearch.toLowerCase())
+  );
+
+  const handleSwipeStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    swipeStartXRef.current = e.touches[0].clientX;
   };
+
+  const handleSwipeEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (swipeStartXRef.current === null) return;
+    const dx = e.changedTouches[0].clientX - swipeStartXRef.current;
+    swipeStartXRef.current = null;
+    if (dx > 80 && appState === AppState.INCOMING_CALL) handleAnswerCall();
+    if (dx < -80 && appState === AppState.INCOMING_CALL) setAppState(AppState.IDLE);
+  };
+
+  const renderMobileContactCard = (contact: CallerIdentity) => (
+    <LongPressButton
+      key={contact.id}
+      onClick={() => callContact(contact.id)}
+      onLongPress={() => toggleFavorite(contact.id)}
+      className={`mobile-contact-card ${favoriteContacts.includes(contact.id) ? 'is-favorite' : ''}`}
+      title="Tap to call. Long press to favorite."
+    >
+      <span className="mobile-contact-fav">{favoriteContacts.includes(contact.id) ? '★' : '☆'}</span>
+      <span className="mobile-contact-name">{contact.name}</span>
+      <span className="mobile-contact-level">{relationshipLabel(contact.id)}</span>
+    </LongPressButton>
+  );
 
   return (
-    <div className={`relative w-full h-screen bg-black overflow-hidden flex flex-col items-center justify-center text-white transition-all duration-100 ${isGlitching ? 'translate-x-1 grayscale' : ''}`}>
+    <div className={`tardis-app-shell relative w-full h-screen bg-black overflow-hidden flex flex-col items-center justify-center text-white transition-all duration-100 ${isGlitching ? 'translate-x-1 grayscale' : ''}`}>
       <div className="absolute inset-0 z-50 crt-overlay h-full w-full pointer-events-none"></div>
       <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/40 via-black to-black"></div>
       <GhostTardis />
@@ -839,8 +993,9 @@ const App: React.FC = () => {
       {editingContactId && (
         <ContactEditor 
           id={editingContactId}
-          initialName={customContacts[editingContactId]?.name || POTENTIAL_CALLERS.find(c => c.id === editingContactId)?.name || ""}
+          initialName={customContacts[editingContactId]?.name || getCallerById(editingContactId)?.name || ""}
           initialPersona={customContacts[editingContactId]?.persona || ""}
+          mode={PERSONAL_ANCHOR_SLOTS.some(slot => slot.id === editingContactId) ? 'personal' : 'override'}
           onSave={handleSaveContact}
           onClose={() => setEditingContactId(null)}
         />
@@ -867,14 +1022,76 @@ const App: React.FC = () => {
       
       <input type="file" ref={fileInputRef} onChange={handlePhotoUpload} accept="image/*" className="hidden" />
 
-      <div className="relative z-20 w-full max-w-4xl h-full flex flex-col items-center justify-between py-12">
-        <div className="text-center space-y-2 mt-8">
+      <div className="mobile-status-bar">
+        <span>{mobileTime}</span>
+        <span>{appState === AppState.CONNECTED ? 'TARDIS: LINKED' : appState === AppState.INCOMING_CALL ? 'TARDIS: RINGING' : 'TARDIS: SCANNING'}</span>
+        <span>{callerStatus()}</span>
+      </div>
+
+      {appState === AppState.INCOMING_CALL && (
+        <div className="mobile-incoming-screen" onTouchStart={handleSwipeStart} onTouchEnd={handleSwipeEnd}>
+          <div className="mobile-incoming-pulse"></div>
+          <p className="mobile-eyebrow">Incoming Transmission</p>
+          <div className="mobile-call-avatar mobile-call-avatar-red">{caller.name.slice(0, 1)}</div>
+          <h2>{caller.name}</h2>
+          <p className="mobile-identity-line">{caller.type || 'UNKNOWN'} · encrypted voice link</p>
+          <div className="mobile-current-location">
+            <span>Current Location</span>
+            <strong>{caller.type === 'EARTH' ? 'Earth / unstable local coordinates' : 'Unknown Star System'}</strong>
+          </div>
+          <p className="mobile-crisis-copy">{currentCrisis}</p>
+          <div className="mobile-answer-slider">Swipe right to answer · left to decline</div>
+          <div className="mobile-call-actions">
+            <button className="mobile-decline" onClick={() => setAppState(AppState.IDLE)}>Decline</button>
+            <button className="mobile-answer" onClick={handleAnswerCall}>Answer</button>
+          </div>
+        </div>
+      )}
+
+      {(appState === AppState.CONNECTED || appState === AppState.CONNECTING) && (
+        <div className="mobile-active-call-screen">
+          <p className="mobile-eyebrow">{appState === AppState.CONNECTING ? 'Materializing Audio Channel' : 'Voice Link Established'}</p>
+          <div className="mobile-call-avatar">{caller.name.slice(0, 1)}</div>
+          <h2>{caller.name}</h2>
+          <p className="mobile-identity-line">{callerStatus()}</p>
+          <div className="mobile-waveform"><span></span><span></span><span></span><span></span><span></span></div>
+          <div className="mobile-crisis-panel">
+            <span>Current Crisis</span>
+            <strong>{currentCrisis}</strong>
+            <small>Current Language: French B2 / English Practice</small>
+          </div>
+          <div className="mobile-caption-toolbar">
+            {(['original', 'translation', 'bilingual'] as const).map(mode => (
+              <button key={mode} onClick={() => setCaptionMode(mode)} className={captionMode === mode ? 'active' : ''}>{mode}</button>
+            ))}
+          </div>
+          <div className="mobile-captions">
+            {liveTranscript.length === 0 ? (
+              <p className="mobile-caption-placeholder">Subtitles will appear when Gemini returns transcription data. Keep speaking naturally.</p>
+            ) : liveTranscript.slice(-5).map((item, index) => (
+              <p key={`${item.role}-${index}`} className={item.role === 'model' ? 'from-character' : 'from-user'}>
+                <span>{item.role === 'model' ? caller.name : 'You'}:</span> {item.text}
+                {captionMode !== 'original' && <em>{captionMode === 'translation' ? 'Translation channel standby.' : ' / Translation channel standby.'}</em>}
+              </p>
+            ))}
+          </div>
+          <div className="mobile-call-control-dock">
+            <button>🎤<span>Mute</span></button>
+            <button onClick={() => setCaptionMode(captionMode === 'original' ? 'bilingual' : 'original')}>📝<span>Caption</span></button>
+            <button onClick={() => fileInputRef.current?.click()}>📷<span>Image</span></button>
+            <button className="hangup" onClick={handleEndCall}>📞<span>End</span></button>
+          </div>
+        </div>
+      )}
+
+      <div className="tardis-main-frame relative z-20 w-full max-w-4xl h-full flex flex-col items-center justify-between py-12">
+        <div className="desktop-title text-center space-y-2 mt-8">
            <h1 className={`text-4xl md:text-6xl font-['Audiowide'] text-cyan-400 tracking-wider shadow-[0_0_15px_rgba(34,211,238,0.5)] ${isGlitching ? 'opacity-50 blur-sm' : ''}`}>T.A.R.D.I.S.</h1>
            <p className="text-sm font-['Share_Tech_Mono'] text-blue-200 uppercase tracking-[0.2em]">Type 40 • Time Travel Capsule • Audio Link</p>
            {isGlitching && ( <p className="text-red-500 font-bold animate-pulse text-xs bg-black/80 inline-block px-2">⚠ SIGNAL UNSTABLE ⚠</p> )}
         </div>
         
-        <div className="relative w-80 h-80 flex items-center justify-center group/rotor">
+        <div className="tardis-rotor relative w-80 h-80 flex items-center justify-center group/rotor">
            <div className={`absolute w-full h-full border-4 border-cyan-900/30 rounded-full animate-[spin_10s_linear_infinite] ${isGlitching ? 'border-red-900/50' : ''} group-hover/rotor:border-cyan-500/40 group-hover/rotor:shadow-[0_0_40px_rgba(34,211,238,0.2)] transition-all duration-500`}></div>
            <div className="absolute w-3/4 h-3/4 border-2 border-dashed border-cyan-500/20 rounded-full animate-[spin_15s_linear_infinite_reverse] group-hover/rotor:border-cyan-400/40 transition-all duration-500"></div>
            
@@ -916,100 +1133,249 @@ const App: React.FC = () => {
            </div>
         </div>
 
-        <div className="w-full max-w-md p-6 border border-cyan-900/50 bg-black/40 backdrop-blur-sm rounded-xl">
-           <div className="flex justify-center items-center gap-6">
+        {appState === AppState.IDLE && (
+          <div className="mobile-contact-rail">
+            {coreContacts.map(renderMobileContactCard)}
+            {personalContacts.map(renderMobileContactCard)}
+            {unlockedContacts.map(renderMobileContactCard)}
+            {personalContacts.length === 0 && (
+              <button className="mobile-contact-card mobile-add-card" onClick={() => setEditingContactId(PERSONAL_ANCHOR_SLOTS[0].id)}>
+                <span className="mobile-contact-name">+ Ordinary Anchor</span>
+                <span className="mobile-contact-level">Mom · Friend · Classmate</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="mobile-tab-panel">
+          {mobileTab === 'contacts' && (
+            <div>
+              <h2>━━ Core Contacts ━━</h2>
+              <input value={contactSearch} onChange={e => setContactSearch(e.target.value)} placeholder="Search directory..." />
+              <div className="mobile-directory-list">
+                {filteredDirectoryContacts.map(contact => (
+                  <LongPressButton key={contact.id} onClick={() => callContact(contact.id)} onLongPress={() => toggleFavorite(contact.id)} className="mobile-directory-row">
+                    <div><strong>{favoriteContacts.includes(contact.id) ? '★ ' : ''}{contact.name}</strong><span>{relationshipLabel(contact.id)}</span></div>
+                    <small>{CORE_CONTACT_IDS.includes(contact.id) ? 'Core Contacts' : contact.id.startsWith('personal_anchor') ? 'Ordinary Anchors' : 'Unlocked Contacts'}</small>
+                  </LongPressButton>
+                ))}
+              </div>
+              <h2>━━ Ordinary Anchors ━━</h2>
+              <div className="mobile-anchor-grid">
+                {PERSONAL_ANCHOR_SLOTS.map(slot => (
+                  <button key={slot.id} onClick={() => setEditingContactId(slot.id)}>
+                    <strong>{customContacts[slot.id]?.name || slot.label}</strong>
+                    <span>{customContacts[slot.id]?.persona ? 'Edit ordinary contact' : 'Add family / friend / classmate'}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {mobileTab === 'events' && (
+            <div>
+              <h2>━━ Event Signals ━━</h2>
+              <p className="mobile-panel-copy">Random callers become active contacts after 3 answered transmissions. Current trace: {recentSignalLog.length || 0} partial signals.</p>
+              {recentSignalLog.map(contact => <p key={contact.id} className="mobile-event-row">{contact.name}<span>{incomingCounts[contact.id] || 0}/{CONTACT_UNLOCK_THRESHOLD}</span></p>)}
+            </div>
+          )}
+          {mobileTab === 'memory' && (
+            <div>
+              <h2>━━ Memory Core ━━</h2>
+              <p className="mobile-panel-copy">Relationship memory is stored locally in this browser. It keeps the characters familiar without uploading your personal history to this site.</p>
+              {allDirectoryContacts.slice(0, 8).map(contact => <p key={contact.id} className="mobile-event-row">{contact.name}<span>{relationshipLabel(contact.id)}</span></p>)}
+            </div>
+          )}
+          {mobileTab === 'settings' && (
+            <div>
+              <h2>━━ Settings ━━</h2>
+              <button className="mobile-settings-button" onClick={() => setShowAvatarEditor(true)}>{userApiKey ? 'API Key Ready / Edit Identity' : 'Set Gemini API Key'}</button>
+              <button className="mobile-settings-button" onClick={() => fileInputRef.current?.click()}>Send Image to a Contact</button>
+              <button className="mobile-settings-button" onClick={() => setShowGameSelector(true)}>Start Mini Game</button>
+            </div>
+          )}
+        </div>
+
+        <div className="desktop-panels w-full max-w-5xl px-4">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.35fr_0.9fr] gap-4">
+            <section className="border border-cyan-800/70 bg-black/50 backdrop-blur-md rounded-2xl p-4 shadow-[0_0_30px_rgba(0,180,255,0.12)]">
+              <div className="flex items-center justify-between gap-3 border-b border-cyan-900/70 pb-3 mb-3">
+                <div>
+                  <h2 className="font-['Audiowide'] text-cyan-300 tracking-[0.18em] text-sm md:text-base">TARDIS DIRECTORY</h2>
+                  <p className="text-[10px] text-cyan-700 uppercase tracking-widest">Call trusted contacts · ordinary anchors · unlocked transmissions</p>
+                </div>
+                <button
+                  onClick={() => setShowAvatarEditor(true)}
+                  className={`px-3 py-2 rounded-lg border text-[10px] font-bold tracking-widest ${userApiKey ? 'border-cyan-500/60 text-cyan-200 bg-cyan-950/40' : 'border-yellow-500/70 text-yellow-200 bg-yellow-950/50 animate-pulse'}`}
+                >
+                  {userApiKey ? 'KEY READY' : 'SET API KEY'}
+                </button>
+              </div>
+
               {appState === AppState.IDLE && (
                 <>
-                    <div className="flex flex-col items-center justify-end h-full">
-                       <button onClick={handleManualCall} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-110 duration-300" aria-label="Call The Doctor">
-                        <div className="w-16 h-16 rounded-full bg-cyan-900 border-4 border-cyan-400 flex items-center justify-center shadow-[0_0_20px_rgba(34,211,238,0.3)] group-hover:shadow-[0_0_50px_rgba(34,211,238,0.8)] group-hover:border-cyan-200 group-hover:bg-cyan-800 transition-all duration-300"><PhoneIcon /></div>
-                        <span className="text-cyan-400 font-bold tracking-widest text-[10px] group-hover:text-cyan-100 group-hover:drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]">DOCTOR</span>
-                      </button>
-                    </div>
-                    
-                    <div className="flex flex-col items-center justify-end h-full gap-4">
-                      {/* GAME BUTTON */}
-                      <button onClick={() => setShowGameSelector(true)} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-110 duration-300" aria-label="Play Game">
-                        <div className="w-16 h-16 rounded-full bg-green-900 border-4 border-green-400 flex items-center justify-center shadow-[0_0_20px_rgba(74,222,128,0.3)] group-hover:shadow-[0_0_50px_rgba(74,222,128,0.8)] group-hover:border-green-200 group-hover:bg-green-800 transition-all duration-300"><GamepadIcon /></div>
-                        <span className="text-green-400 font-bold tracking-widest text-[10px] group-hover:text-green-100 group-hover:drop-shadow-[0_0_5px_rgba(74,222,128,0.8)]">GAME</span>
-                      </button>
-
-                      {/* SEND IMG BUTTON */}
-                      <button onClick={() => fileInputRef.current?.click()} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-110 duration-300" aria-label="Send Photo">
-                        <div className="w-16 h-16 rounded-full bg-blue-900 border-4 border-blue-400 flex items-center justify-center shadow-[0_0_20px_rgba(96,165,250,0.3)] group-hover:shadow-[0_0_50px_rgba(96,165,250,0.8)] group-hover:border-blue-200 group-hover:bg-blue-800 transition-all duration-300"><CameraIcon /></div>
-                        <span className="text-blue-400 font-bold tracking-widest text-[10px] group-hover:text-blue-100 group-hover:drop-shadow-[0_0_5px_rgba(96,165,250,0.8)]">SEND IMG</span>
-                      </button>
-                    </div>
-                    
-                    <div className="flex flex-col items-center justify-end h-full">
-                      <button onClick={handleCallRiver} className="group relative flex flex-col items-center gap-1 transition-all hover:scale-110 duration-300 mb-2" aria-label="Call River Song">
-                        <div className="w-12 h-12 rounded-full bg-yellow-900 border-4 border-yellow-400 flex items-center justify-center shadow-[0_0_20px_rgba(250,204,21,0.3)] group-hover:shadow-[0_0_50px_rgba(250,204,21,0.8)] group-hover:border-yellow-200 group-hover:bg-yellow-800 transition-all duration-300"><BookIcon /></div>
-                        <span className="text-yellow-400 font-bold tracking-widest text-[8px] group-hover:text-yellow-100">RIVER</span>
-                      </button>
-
-                      <AffectionMeter score={scores['friend_sam'] || 1} color="bg-pink-500" />
-                      <LongPressButton 
-                        onClick={handleCallFriend} 
-                        onLongPress={() => setEditingContactId('friend_sam')}
-                        className="group relative flex flex-col items-center gap-2 transition-all hover:scale-110 duration-300" 
-                        aria-label="Call Bestie"
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                    {coreContacts.map(contact => (
+                      <button
+                        key={contact.id}
+                        onClick={() => callContact(contact.id)}
+                        className={`group min-h-[92px] rounded-xl border p-3 text-left transition-all hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(34,211,238,0.25)] ${contactTone(contact.id)}`}
                       >
-                        <div className="w-16 h-16 rounded-full bg-pink-900 border-4 border-pink-400 flex items-center justify-center shadow-[0_0_20px_rgba(244,114,182,0.3)] group-hover:shadow-[0_0_50px_rgba(244,114,182,0.8)] group-hover:border-pink-200 group-hover:bg-pink-800 transition-all duration-300"><StarIcon /></div>
-                        <span className="text-pink-400 font-bold tracking-widest text-[10px] group-hover:text-pink-100 group-hover:drop-shadow-[0_0_5px_rgba(244,114,182,0.8)]">
-                           {customContacts['friend_sam']?.name || 'BESTIE'}
-                        </span>
-                      </LongPressButton>
-                    </div>
-                    <div className="flex flex-col items-center justify-end h-full">
-                      <AffectionMeter score={scores['ex_partner'] || 1} color="bg-purple-500" />
-                      <LongPressButton 
-                        onClick={handleCallEx} 
-                        onLongPress={() => setEditingContactId('ex_partner')}
-                        className="group relative flex flex-col items-center gap-2 transition-all hover:scale-110 duration-300" 
-                        aria-label="Call Ex"
-                      >
-                        <div className="w-16 h-16 rounded-full bg-purple-900 border-4 border-purple-400 flex items-center justify-center shadow-[0_0_20px_rgba(192,132,252,0.3)] group-hover:shadow-[0_0_50px_rgba(192,132,252,0.8)] group-hover:border-purple-200 group-hover:bg-purple-800 transition-all duration-300"><BrokenHeartIcon /></div>
-                        <span className="text-purple-400 font-bold tracking-widest text-[10px] group-hover:text-purple-100 group-hover:drop-shadow-[0_0_5px_rgba(192,132,252,0.8)]">
-                           {customContacts['ex_partner']?.name || 'EX'}
-                        </span>
-                      </LongPressButton>
-                    </div>
-                    <div className="flex flex-col items-center justify-end h-full">
-                      <AffectionMeter score={scores['master_missy'] || 1} color="bg-green-500" />
-                      <button onClick={handleCallMaster} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-110 duration-300" aria-label="Call Missy">
-                        <div className="w-16 h-16 rounded-full bg-green-900 border-4 border-green-400 flex items-center justify-center shadow-[0_0_20px_rgba(74,222,128,0.3)] group-hover:shadow-[0_0_50px_rgba(74,222,128,0.8)] group-hover:border-green-200 group-hover:bg-green-800 transition-all duration-300"><SkullIcon /></div>
-                        <span className="text-green-400 font-bold tracking-widest text-[10px] group-hover:text-green-100 group-hover:drop-shadow-[0_0_5px_rgba(74,222,128,0.8)]">MISSY</span>
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-[0.25em] opacity-60">Core Contact</p>
+                            <p className="font-['Audiowide'] text-sm leading-tight mt-1">{contact.name.replace('Unknown (', '').replace(')', '')}</p>
+                          </div>
+                          <span className="text-[10px] border border-current/30 rounded-full px-2 py-0.5 opacity-70">LV {scores[contact.id] || 1}</span>
+                        </div>
+                        <p className="text-[10px] mt-3 opacity-70 leading-snug">Voice link ready. Tap to call.</p>
                       </button>
+                    ))}
+                  </div>
+
+                  <div className="rounded-xl border border-pink-500/20 bg-pink-950/10 p-3 mb-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <p className="font-['Audiowide'] text-pink-200 text-xs tracking-[0.18em]">ORDINARY ANCHORS</p>
+                        <p className="text-[10px] text-pink-300/50 uppercase tracking-widest">Max 3. Family/friends only. They highlight your hidden life.</p>
+                      </div>
                     </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {PERSONAL_ANCHOR_SLOTS.map(slot => {
+                        const data = customContacts[slot.id];
+                        const ready = Boolean(data?.name);
+                        return (
+                          <div key={slot.id} className={`rounded-xl border p-3 ${ready ? contactTone(slot.id) : 'border-gray-700/70 bg-gray-950/50 text-gray-400'}`}>
+                            <p className="text-[9px] uppercase tracking-[0.22em] opacity-60">{slot.label}</p>
+                            <p className="font-bold text-sm mt-1 truncate">{ready ? data.name : 'Empty Slot'}</p>
+                            <p className="text-[10px] opacity-60 mt-1 h-8 leading-snug">{ready ? (data.persona || 'Ordinary person who knows your daily life.') : slot.hint}</p>
+                            <div className="flex gap-2 mt-3">
+                              <button
+                                onClick={() => ready ? callContact(slot.id) : setEditingContactId(slot.id)}
+                                className="flex-1 rounded-lg border border-current/40 px-2 py-1.5 text-[10px] font-bold hover:bg-white/10 transition"
+                              >
+                                {ready ? 'CALL' : 'ADD'}
+                              </button>
+                              <button
+                                onClick={() => setEditingContactId(slot.id)}
+                                className="rounded-lg border border-current/20 px-2 py-1.5 text-[10px] hover:bg-white/10 transition"
+                              >
+                                EDIT
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <button onClick={() => setShowGameSelector(true)} className="rounded-xl border border-green-400/50 bg-green-950/25 p-3 text-green-200 hover:bg-green-900/40 hover:-translate-y-0.5 transition">
+                      <div className="flex justify-center mb-1"><GamepadIcon /></div>
+                      <p className="text-[10px] font-bold tracking-widest">MINI GAME</p>
+                    </button>
+                    <button onClick={() => fileInputRef.current?.click()} className="rounded-xl border border-blue-400/50 bg-blue-950/25 p-3 text-blue-200 hover:bg-blue-900/40 hover:-translate-y-0.5 transition">
+                      <div className="flex justify-center mb-1"><CameraIcon /></div>
+                      <p className="text-[10px] font-bold tracking-widest">SEND IMAGE</p>
+                    </button>
+                    <button onClick={() => setShowAvatarEditor(true)} className="rounded-xl border border-cyan-400/50 bg-cyan-950/25 p-3 text-cyan-200 hover:bg-cyan-900/40 hover:-translate-y-0.5 transition">
+                      <div className="flex justify-center mb-1"><UserIcon /></div>
+                      <p className="text-[10px] font-bold tracking-widest">IDENTITY</p>
+                    </button>
+                  </div>
                 </>
               )}
+
               {appState === AppState.INCOMING_CALL && (
-                <button onClick={handleAnswerCall} className="group relative flex flex-col items-center gap-2 animate-bounce">
-                  <div className="w-24 h-24 rounded-full bg-orange-600 border-4 border-orange-400 flex items-center justify-center shadow-[0_0_30px_rgba(255,165,0,0.6)] group-hover:shadow-[0_0_60px_rgba(255,165,0,0.9)] group-hover:scale-110 transition-all"><PhoneIcon /></div>
-                  <span className="text-orange-400 font-bold tracking-widest text-sm group-hover:text-orange-200">ANSWER</span>
-                </button>
+                <div className="rounded-2xl border border-red-500/70 bg-red-950/30 p-5 text-center shadow-[0_0_45px_rgba(239,68,68,0.18)]">
+                  <p className="font-['Audiowide'] text-red-300 tracking-[0.25em] animate-pulse">INCOMING TRANSMISSION</p>
+                  <p className="text-2xl text-white mt-2">{caller.name}</p>
+                  <p className="text-xs text-red-200/70 mt-2 line-clamp-2">{caller.currentScenario || caller.adventure || 'Signal content encrypted.'}</p>
+                  <div className="flex justify-center gap-4 mt-5">
+                    <button onClick={handleAnswerCall} className="px-6 py-3 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-['Audiowide'] tracking-widest shadow-[0_0_30px_rgba(249,115,22,0.35)]">ANSWER</button>
+                    <button onClick={() => setAppState(AppState.IDLE)} className="px-6 py-3 rounded-xl border border-red-500/60 text-red-200 hover:bg-red-900/40 font-['Audiowide'] tracking-widest">DECLINE</button>
+                  </div>
+                </div>
               )}
+
               {(appState === AppState.CONNECTED || appState === AppState.CONNECTING) && (
-                <>
-                <button onClick={handleEndCall} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105 duration-300">
-                  <div className="w-20 h-20 rounded-full bg-red-900 border-2 border-red-500 flex items-center justify-center shadow-[0_0_20px_rgba(239,68,68,0.3)] group-hover:shadow-[0_0_50px_rgba(239,68,68,0.8)] group-hover:border-red-300 group-hover:bg-red-800 transition-all"><PhoneOffIcon /></div>
-                  <span className="text-red-500 font-bold tracking-widest text-xs group-hover:text-red-200">SEVER LINK</span>
-                </button>
-                <button onClick={() => {}} className="group relative flex flex-col items-center gap-2 transition-all hover:scale-105 duration-300" title="Ask for a photo">
-                  <div className="w-16 h-16 rounded-full bg-cyan-900/50 border-2 border-cyan-400 flex items-center justify-center shadow-[0_0_20px_rgba(34,211,238,0.2)] group-hover:shadow-[0_0_40px_rgba(34,211,238,0.6)] group-hover:border-cyan-200 group-hover:bg-cyan-800/80 transition-all"><DownloadIcon /></div>
-                  <span className="text-cyan-400 font-bold tracking-widest text-[8px] group-hover:text-cyan-200">REQ IMG</span>
-                </button>
-                </>
+                <div className="rounded-2xl border border-cyan-500/60 bg-cyan-950/20 p-5 text-center">
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-cyan-500">Active Link</p>
+                  <p className="text-xl text-cyan-100 mt-1">{caller.name}</p>
+                  <p className="text-[10px] text-cyan-600 mt-1">{appState === AppState.CONNECTING ? 'Materializing audio channel...' : 'Signal locked. Speak naturally.'}</p>
+                  <div className="flex justify-center gap-4 mt-5">
+                    <button onClick={handleEndCall} className="px-6 py-3 rounded-xl bg-red-900/80 border border-red-400 text-red-100 hover:bg-red-800 font-['Audiowide'] tracking-widest">SEVER LINK</button>
+                    <button onClick={() => fileInputRef.current?.click()} className="px-4 py-3 rounded-xl border border-cyan-400/60 text-cyan-100 hover:bg-cyan-900/40 font-['Audiowide'] tracking-widest text-xs">SEND IMAGE</button>
+                  </div>
+                </div>
               )}
-           </div>
-           <div className="mt-6 border-t border-cyan-900/50 pt-4">
-              <div className="flex justify-between text-xs text-cyan-600 font-mono">
-                <span>FREQ: {isGlitching ? 'DRIFTING...' : (appState === AppState.CONNECTED ? 'LOCKED' : 'SCANNING')}</span>
-                <span className="text-[10px] text-gray-500">HOLD BTN TO EDIT CONTACTS</span>
+            </section>
+
+            <aside className="border border-blue-800/60 bg-black/45 backdrop-blur-md rounded-2xl p-4 shadow-[0_0_30px_rgba(59,130,246,0.1)] max-h-[44vh] overflow-y-auto">
+              <h2 className="font-['Audiowide'] text-blue-200 tracking-[0.18em] text-sm">SIGNAL LOG</h2>
+              <p className="text-[10px] text-blue-400/60 uppercase tracking-widest mt-1">Random callers join your directory after 3 answered calls.</p>
+
+              <div className="mt-4 space-y-3">
+                <div>
+                  <p className="text-[10px] text-cyan-400 uppercase tracking-[0.22em] mb-2">Unlocked Contacts</p>
+                  {unlockedContacts.length === 0 ? (
+                    <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3 text-[11px] text-gray-500 leading-relaxed">
+                      No random caller has reached 3 answered calls yet. Let the universe interrupt you a few more times.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {unlockedContacts.map(contact => (
+                        <button key={contact.id} onClick={() => callContact(contact.id)} className="w-full rounded-xl border border-blue-500/40 bg-blue-950/20 p-3 text-left hover:bg-blue-900/40 transition">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-blue-100 truncate">{contact.name}</span>
+                            <span className="text-[9px] text-blue-400">{incomingCounts[contact.id] || 0} CALLS</span>
+                          </div>
+                          <p className="text-[10px] text-blue-300/50 mt-1 uppercase tracking-widest">Saved to directory</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <p className="text-[10px] text-orange-300 uppercase tracking-[0.22em] mb-2">Almost Traceable</p>
+                  {recentSignalLog.length === 0 ? (
+                    <div className="rounded-xl border border-gray-800 bg-gray-950/40 p-3 text-[11px] text-gray-500">No partial traces yet.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {recentSignalLog.map(contact => {
+                        const count = incomingCounts[contact.id] || 0;
+                        return (
+                          <div key={contact.id} className="rounded-xl border border-orange-500/25 bg-orange-950/10 p-3">
+                            <div className="flex justify-between gap-2 text-xs">
+                              <span className="text-orange-100 truncate">{contact.name}</span>
+                              <span className="text-orange-300">{count}/{CONTACT_UNLOCK_THRESHOLD}</span>
+                            </div>
+                            <div className="h-1.5 bg-black/60 rounded-full overflow-hidden mt-2 border border-orange-900/40">
+                              <div className="h-full bg-orange-400 transition-all" style={{ width: `${Math.min(100, (count / CONTACT_UNLOCK_THRESHOLD) * 100)}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
-           </div>
+            </aside>
+          </div>
+
+          <div className="mt-3 flex flex-wrap justify-between gap-2 text-[10px] text-cyan-700 font-mono uppercase tracking-widest">
+            <span>FREQ: {isGlitching ? 'DRIFTING...' : (appState === AppState.CONNECTED ? 'LOCKED' : 'SCANNING')}</span>
+            <span>Hidden identity protocol: ordinary contacts remain ordinary.</span>
+          </div>
         </div>
       </div>
+
+      <nav className="mobile-bottom-dock">
+        <button className={mobileTab === 'contacts' ? 'active' : ''} onClick={() => setMobileTab('contacts')}>📞<span>通讯录</span></button>
+        <button className={mobileTab === 'events' ? 'active' : ''} onClick={() => setMobileTab('events')}>🌌<span>事件</span></button>
+        <button className={mobileTab === 'memory' ? 'active' : ''} onClick={() => setMobileTab('memory')}>🧠<span>记忆</span></button>
+        <button className={mobileTab === 'settings' ? 'active' : ''} onClick={() => setMobileTab('settings')}>⚙<span>设置</span></button>
+      </nav>
     </div>
   );
 };

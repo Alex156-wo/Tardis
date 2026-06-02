@@ -367,8 +367,15 @@ export const getSystemInstruction = (caller: CallerIdentity, previousContext: st
   
   // LOGIC TO USE CUSTOM PERSONA IF AVAILABLE
   let scenarioContext = caller.customPersona 
-      ? `CUSTOM USER-DEFINED PERSONA/SCENARIO:\n${caller.customPersona}\n\n(IGNORE default scenarios. Act out this specific persona/context exclusively.)`
-      : `CURRENT SCENARIO:\n${caller.adventure ? `WEIRD EVENT: ${caller.adventure}` : `SCENARIO: ${caller.currentScenario}`}`;
+      ? `CUSTOM ORDINARY CONTACT PROFILE:
+${caller.customPersona}
+
+CURRENT CALL SITUATION:
+${caller.adventure ? `WEIRD EVENT: ${caller.adventure}` : `SCENARIO: ${caller.currentScenario || 'A normal daily call is interrupted by something impossible.'}`}
+
+STRICT GUARDRAIL: This custom contact is an ordinary person from the user's daily life: family, friend, classmate, coworker, or neighbor. They are NOT a Time Lord, government leader, secret agent, alien, god, or supernatural being. Their narrative purpose is to contrast the user's hidden extraordinary identity with ordinary life.`
+      : `CURRENT SCENARIO:
+${caller.adventure ? `WEIRD EVENT: ${caller.adventure}` : `SCENARIO: ${caller.currentScenario}`}`;
 
   // GAME OVERRIDE
   if (isGameCommentary) {
@@ -473,6 +480,7 @@ export const getSystemInstruction = (caller: CallerIdentity, previousContext: st
       - Immerse yourself in the mundane or weird drama of the scenario.
       - Gossip, complain, laugh, or panic as appropriate.
       - Be extremely casual. You know the user well.
+      - If this is a custom ordinary contact, keep them grounded and human. Let them react to the user's hidden extraordinary life with worry, confusion, teasing, jealousy, or awe.
     `;
   }
 };

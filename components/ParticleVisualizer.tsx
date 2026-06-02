@@ -9,7 +9,8 @@ interface ParticleVisualizerProps {
   isGlitching: boolean; // New prop for instability
 }
 
-const PARTICLE_COUNT = 1600; 
+const DESKTOP_PARTICLE_COUNT = 1600;
+const MOBILE_PARTICLE_COUNT = 800;
 const RADIUS = 350; 
 
 const ParticleVisualizer: React.FC<ParticleVisualizerProps> = ({ analyser, isActive, isGlitching }) => {
@@ -27,7 +28,8 @@ const ParticleVisualizer: React.FC<ParticleVisualizerProps> = ({ analyser, isAct
     const centerY = height / 2;
 
     const newParticles: Particle[] = [];
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
+    const particleCount = window.innerWidth < 768 ? MOBILE_PARTICLE_COUNT : DESKTOP_PARTICLE_COUNT;
+    for (let i = 0; i < particleCount; i++) {
       const angle = Math.random() * Math.PI * 2;
       // Distribute more evenly but denser in the center
       const r = Math.sqrt(Math.random()) * RADIUS; 
