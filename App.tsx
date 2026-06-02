@@ -86,28 +86,53 @@ const LongPressButton: React.FC<LongPressButtonProps> = ({ onClick, onLongPress,
   const [isPressing, setIsPressing] = useState(false);
   const [isLongPress, setIsLongPress] = useState(false);
   const timerRef = useRef<any>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const didMoveRef = useRef(false);
 
-  const startPress = useCallback(() => {
-    setIsPressing(true);
-    setIsLongPress(false);
-    timerRef.current = window.setTimeout(() => {
-      setIsLongPress(true);
-      onLongPress();
-    }, 800); 
-  }, [onLongPress]);
-
-  const endPress = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    setIsPressing(false);
+  const clearPressTimer = useCallback(() => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+  }, []);
+
+  const startPress = useCallback((e?: React.TouchEvent | React.MouseEvent) => {
+    setIsPressing(true);
+    setIsLongPress(false);
+    didMoveRef.current = false;
+    if (e && 'touches' in e && e.touches[0]) {
+      touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    } else {
+      touchStartRef.current = null;
+    }
+    timerRef.current = window.setTimeout(() => {
+      if (!didMoveRef.current) {
+        setIsLongPress(true);
+        onLongPress();
+      }
+    }, 800);
+  }, [onLongPress]);
+
+  const movePress = useCallback((e: React.TouchEvent) => {
+    if (!touchStartRef.current || !e.touches[0]) return;
+    const dx = Math.abs(e.touches[0].clientX - touchStartRef.current.x);
+    const dy = Math.abs(e.touches[0].clientY - touchStartRef.current.y);
+    if (dx > 10 || dy > 10) {
+      didMoveRef.current = true;
+      clearPressTimer();
+    }
+  }, [clearPressTimer]);
+
+  const endPress = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    setIsPressing(false);
+    clearPressTimer();
+    touchStartRef.current = null;
     
-    // Only trigger regular click if it wasn't a long press
-    if (!isLongPress && onClick) {
+    // Only trigger regular click if it wasn't a long press and the finger did not scroll.
+    if (!isLongPress && !didMoveRef.current && onClick) {
       onClick(e as any);
     }
-  }, [isLongPress, onClick]);
+  }, [isLongPress, onClick, clearPressTimer]);
 
   return (
     <button
@@ -115,6 +140,8 @@ const LongPressButton: React.FC<LongPressButtonProps> = ({ onClick, onLongPress,
       onMouseUp={endPress}
       onMouseLeave={endPress}
       onTouchStart={startPress}
+      onTouchMove={movePress}
+      onTouchCancel={endPress}
       onTouchEnd={endPress}
       {...props}
     >
@@ -1194,6 +1221,8 @@ const App: React.FC = () => {
             </div>
           )}
         </div>
+
+        <div className="mobile-scroll-spacer" aria-hidden="true" />
 
         <div className="desktop-panels w-full max-w-5xl px-4">
           <div className="grid grid-cols-1 lg:grid-cols-[1.35fr_0.9fr] gap-4">
